@@ -32,7 +32,9 @@ from . import block as b
 class LazyMp(GroundState):
     @cached_member_function
     def t2(self, space):
-        """T2 amplitudes"""
+        """
+        T2 amplitudes (i.e., 1st-order doubles amplitudes)
+        """
         hf = self.reference_state
         sp = split_spaces(space)
         assert all(s == b.v for s in sp[2:])
@@ -44,10 +46,12 @@ class LazyMp(GroundState):
 
     @cached_member_function
     def ts2(self, space):
-        """Computes the second order singles amplitudes."""
+        """
+        Computes the 2nd-order singles amplitudes.
+        """
         if space != b.ov:
-            raise NotImplementedError("Second order singles amplitudes not "
-                                      f"implemented for space {space}.")
+            raise NotImplementedError("2nd-order MP singles amplitudes "
+                                      f"not implemented for space {space}.")
         hf = self.reference_state
         return -0.5 * (
             + einsum("ijbc,jabc->ia", self.t2oo, hf.ovvv)
@@ -56,10 +60,12 @@ class LazyMp(GroundState):
 
     @cached_member_function
     def td2(self, space):
-        """Return the T^D_2 term"""
+        """
+        Return the 2nd-order doubles amplitudes.
+        """
         if space != b.oovv:
-            raise NotImplementedError("T^D_2 term not implemented "
-                                      f"for space {space}.")
+            raise NotImplementedError("2nd-order MP doubles amplitudes "
+                                      f"not implemented for space {space}.")
         t2erit = self.t2eri(b.oovv, b.ov).transpose((1, 0, 2, 3))
         denom = direct_sum(
             'ia,jb->ijab', self.df(b.ov), self.df(b.ov)
@@ -70,9 +76,39 @@ class LazyMp(GroundState):
             - 0.5 * self.t2eri(b.oovv, b.oo)
         ) / denom
 
+    @cached_member_function()
+    def tt2(self, space: str):
+        """
+        Return the 2nd-order MP triples amplitudes for the given space
+        (e.g. o1o1o1v1v1v1).
+        """
+        if space != b.ooovvv:
+            raise NotImplementedError("2nd-order MP triples amplitudes "
+                                      f"not implemented for space {space}.")
+        hf = self.reference_state
+        df = self.df(b.ov)
+        t2_1 = self.t2(b.oovv)
+        # denom = a + b + c - i - j - k   //   df = i - a
+        denom = - 1 * direct_sum(
+            "ia,jkbc->ijkabc", df, direct_sum("jb,kc->jkbc", df, df)
+        ).symmetrise(0, 1, 2).symmetrise(3, 4, 5)
+        # prefactor of 9, because we have 9 terms each in the expression, while the
+        # antisymmetrisation generates 36 terms and introduces a prefactor of 1/36.
+        # Each of the 9 terms is therefore generated 4 times.
+        # The scaling in the comments is given as: [comp_scaling] / [mem_scaling]
+        numerator = (
+            # N^7: O^3V^4 / N^6: O^3V^3
+            + 9 * einsum('idab,jkcd->ijkabc', hf.ovvv, t2_1)
+            # N^7: O^4V^3 / N^6: O^3V^3
+            + 9 * einsum('ijla,klbc->ijkabc', hf.ooov, t2_1)
+        ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+        return numerator / denom
+
     @cached_member_function
     def energy_correction(self, level=2):
-        """Obtain the MP energy correction at a particular level"""
+        """
+        Obtain the MP energy correction at a particular level.
+        """
         if level > 3:
             raise NotImplementedError(f"MP({level}) energy correction "
                                       "not implemented.")
@@ -98,7 +134,7 @@ class LazyMp(GroundState):
     def energy(self, level=2):
         """
         Obtain the total MP energy (SCF energy plus all corrections)
-        at a particular level of perturbation theory.
+        consistent through a particular level of perturbation theory.
         """
         if level == 0:
             # Sum of orbital energies ...
@@ -126,11 +162,25 @@ class LazyMp(GroundState):
 
     @property
     def mp2_density(self):
+        """
+        Return the MP2 ground state density in the MO basis.
+        """
         return self.density(2)
 
     @property
     def mp2_dipole_moment(self):
-        return self.second_order_dipole_moment
+        """
+        Return the MP2 ground state dipole moment.
+        """
+        return self.dipole_moment(2)
+
+    @property
+    def mp2_second_order_dipole_moment(self):
+        """
+        Return the 2nd-order correction
+        to the MP2 ground state dipole moment.
+        """
+        return self.second_order_dipole_moment()
 
 
 #

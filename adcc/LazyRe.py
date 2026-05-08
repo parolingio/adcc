@@ -55,8 +55,9 @@ class LazyRe(GroundState):
 
     @cached_member_function
     def ts1(self, space):
-        """First order RE ground state singles amplitudes.
-           Zero for a block diagonal Fock matrix.
+        """
+        First order RE ground state singles amplitudes.
+        Zero for a block diagonal Fock matrix.
         """
         raise NotImplementedError("The first order RE singles amplitudes vanish "
                                   "for a block diagonal fock matrix. Probably you "
@@ -64,26 +65,28 @@ class LazyRe(GroundState):
 
     @cached_member_function
     def t2(self, space):
-        """First order RE ground state doubles amplitudes."""
+        """
+        1st-order RE ground state doubles amplitudes.
+        """
         from .solver.conjugate_gradient import conjugate_gradient, default_print
         from .solver.preconditioner import JacobiPreconditioner
         from .LazyMp import LazyMp
 
         if space != b.oovv:
-            raise NotImplementedError("First order doubles not implemented for "
-                                      f"space {space}.")
+            raise NotImplementedError("1st-order RE doubles"
+                                      f"not implemented for space {space}.")
         hf = self.reference_state
 
         # build the right hand side of Ax = b
         rhs = -hf.oovv
         rhs = AmplitudeVector(pphh=rhs)
 
-        # build a guess for the t-amplitudes: use mp-amplitudes as they only
+        # build a guess for the t-amplitudes: use MP amplitudes as they only
         # scale N^4, while each iteration scales as N^6
         guess = LazyMp(self.reference_state).t2(space)
         guess = AmplitudeVector(pphh=guess)
 
-        print("\nIterating first order RE doubles amplitudes...")
+        print("\nIterating 1st-order RE doubles amplitudes...")
         t2 = conjugate_gradient(Doubles(hf), rhs, guess, callback=default_print,
                                 explicit_symmetrisation=None,
                                 conv_tol=self.conv_tol,
@@ -94,13 +97,15 @@ class LazyRe(GroundState):
 
     @cached_member_function
     def ts2(self, space):
-        """Second order RE ground state singles amplitudes."""
+        """
+        2nd-order RE ground state singles amplitudes.
+        """
         from .solver.conjugate_gradient import conjugate_gradient, default_print
         from .solver.preconditioner import JacobiPreconditioner
         from .LazyMp import LazyMp
 
         if space != b.ov:
-            raise NotImplementedError("Second order singles not implemented for "
+            raise NotImplementedError("2nd-order singles not implemented for "
                                       f"space {space}.")
         hf = self.reference_state
         t2_1 = self.t2(b.oovv)
@@ -116,7 +121,7 @@ class LazyRe(GroundState):
         guess = LazyMp(self.reference_state).ts2(space)
         guess = AmplitudeVector(ph=guess)
 
-        print("\nIterating Second order RE singles amplitudes...")
+        print("\nIterating 2nd-order RE singles amplitudes...")
         t1 = conjugate_gradient(Singles(hf), rhs, guess, callback=default_print,
                                 explicit_symmetrisation=None,
                                 conv_tol=self.conv_tol,
@@ -127,17 +132,20 @@ class LazyRe(GroundState):
 
     @cached_member_function
     def td2(self, space):
-        """Second order RE ground state doubles amplitudes.
-           Zero as long as the first order singles are 0
-           -> Zero for a block diagonal Fock matrix
         """
-        raise NotImplementedError("The second order RE doubles amplitudes vanish "
+        Second order RE ground state doubles amplitudes.
+        Zero as long as the first order singles are 0
+        -> Zero for a block diagonal Fock matrix
+        """
+        raise NotImplementedError("The 2nd-order RE doubles amplitudes vanish "
                                   "for a block diagonal fock matrix. Probably you "
                                   "don't need this tensor.")
 
     @cached_member_function
     def energy_correction(self, level=2):
-        """Obtain the RE energy correction at a particular level."""
+        """
+        Obtain the RE energy correction at a particular level.
+        """
         hf = self.reference_state
         if level < 2:
             return 0.0
@@ -154,7 +162,7 @@ class LazyRe(GroundState):
     def energy(self, level=2):
         """
         Obtain the total RE energy (SCF energy plus all corrections)
-        at a particular level of perturbation theory.
+        consistent through a particular level of perturbation theory.
         """
         # 0th order: SCF; 1st order: zero
         energies = [self.reference_state.energy_scf]
@@ -179,11 +187,25 @@ class LazyRe(GroundState):
 
     @property
     def re2_density(self):
+        """
+        Return the RE2 ground state density in the MO basis.
+        """
         return self.density(2)
 
     @property
     def re2_dipole_moment(self):
-        return self.second_order_dipole_moment
+        """
+        Return the RE2 ground state dipole moment.
+        """
+        return self.dipole_moment(2)
+
+    @property
+    def re2_second_order_dipole_moment(self):
+        """
+        Return the 2nd-order correction
+        to the RE2 ground state dipole moment.
+        """
+        return self.second_order_dipole_moment()
 
 
 class ReAmplitude(AdcMatrixlike):
