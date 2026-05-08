@@ -57,7 +57,9 @@ class GroundState:
 
     @cached_member_function
     def df(self, space: str):
-        """Delta Fock matrix"""
+        """
+        Delta Fock matrix.
+        """
         hf = self.reference_state
         s1, s2 = split_spaces(space)
         fC = hf.fock(s1 + s1).diagonal()
@@ -92,7 +94,7 @@ class GroundState:
     def density(self, level=2):
         """
         Return the ground state density in the MO basis with all corrections
-        up to the specified order of perturbation theory
+        up to the specified order of perturbation theory.
         """
         if level == 1:
             return self.reference_state.density
@@ -312,14 +314,18 @@ class GroundState:
 
     @cached_member_function
     def t2(self, space: str):
-        """T2 amplitudes"""
+        """
+        T2 amplitudes (i.e., 1st-order doubles amplitudes)
+        """
         raise NotImplementedError("1st-order doubles amplitudes ",
                                   "not implemented for the GroundState ",
                                   "base class.")
 
     @cached_member_function
     def td2(self, space: str):
-        """Return the T^D_2 term"""
+        """
+        Return the 2nd-order doubles amplitudes.
+        """
         raise NotImplementedError("2nd-order doubles amplitudes ",
                                   "not implemented for the GroundState ",
                                   "base class.")
@@ -327,7 +333,7 @@ class GroundState:
     @cached_member_function
     def tt2(self, space: str):
         """
-        Return the second order MP triples amplitudes for the given space
+        Return the second order triples amplitudes for the given space
         (e.g. o1o1o1v1v1v1).
         """
         raise NotImplementedError("2nd-order triples amplitudes ",
@@ -336,7 +342,10 @@ class GroundState:
 
     @cached_member_function()
     def energy_correction(self, level=2):
-        """Obtain the energy correction at a particular level"""
+        """
+        Obtain the energy correction at a particular level of perturbation
+        theory.
+        """
         raise NotImplementedError("Energy corrections ",
                                   "not defined for the GroundState ",
                                   "base class.")
@@ -344,7 +353,7 @@ class GroundState:
     def energy(self, level=2):
         """
         Obtain the total energy (SCF energy plus all corrections)
-        at a particular level of perturbation theory.
+        consistent through a particular level of perturbation theory.
         """
         raise NotImplementedError("Total energy ",
                                   "not defined for the GroundState ",
