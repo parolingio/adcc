@@ -96,47 +96,36 @@ class GroundState:
         Return the ground state density in the MO basis with all corrections
         up to the specified order of perturbation theory.
         """
-        if level == 1:
+        if level < 2:
             return self.reference_state.density
         elif level == 2:
             return self.reference_state.density + self.second_order_diffdm
         else:
-            raise NotImplementedError("Only densities for level 1 and 2"
-                                      " are implemented.")
-        #if level < 2:
-        #    return self.reference_state.density
-        #elif level == 2:
-        #    return self.reference_state.density + self.second_order_diffdm
-        #else:
-        #    raise NotImplementedError("Only densities up to 2nd-order"
+            raise NotImplementedError("Only densities up to 2nd-order"
                                      " are implemented.")
 
     @property
-    def mp2_density(self):  # Keep, remove or rename?
-    #def density_through_2nd_order(self):
-        return self.density(2)
+    def density_through_2nd_order(self):
+        """
+        Shortcut for density(2).
+        Return the ground state density in the MO basis with all corrections
+        up to 2nd order.
+        """
+        return density(2)
 
     def dipole_moment(self, level=2):
         """
         Return the ground state dipole moment at the specified level of
         perturbation theory.
         """
-        if level == 1:
+        if level < 2:
             return self.reference_state.dipole_moment
         elif level == 2:
             return self.reference_state.dipole_moment + 
                                              self.second_order_dipole_moment
         else:
-            raise NotImplementedError("Only dipole moments for level 1 and 2"
+            raise NotImplementedError("Only dipole moments up to 2nd-order"
                                       " are implemented.")
-        #if level < 2:
-        #    return self.reference_state.dipole_moment
-        #elif level == 2:
-        #    return self.reference_state.dipole_moment + 
-        #                                     self.second_order_dipole_moment
-        #else:
-        #    raise NotImplementedError("Only dipole moments up to 2nd-order"
-        #                              " are implemented.")
 
     @cached_property
     def second_order_dipole_moment(self):
@@ -154,12 +143,11 @@ class GroundState:
         Return the n-th order contribution to the ground state difference density
         in the MO basis.
         """
-        #if level < 2:
-        #    raise NotImplementedError("The first non-vanishing contribution to "
-        #                              "the ground state difference density is "
-        #                              "in 2nd order.")
-        #elif level == 2:
-        if level == 2:
+        if level < 2:
+            raise NotImplementedError("The first non-vanishing contribution to "
+                                      "the ground state difference density is "
+                                      "in 2nd order.")
+        elif level == 2:
             return self.second_order_diffdm
         else:
             raise NotImplementedError("Difference density only implemented for "
@@ -169,10 +157,17 @@ class GroundState:
     @timed_member_call(timer="timer")
     def second_order_diffdm(self):
         """
-        Return the 2nd-order ground state density contribution in the MO basis.
+        Return the 2nd-order difference density in the MO basis.
         """
-        ret = OneParticleOperator(self.mospaces, is_symmetric=True)
+        ret = OneParticleDensity(self.mospaces,
+                                 symmetry=OperatorSymmetry.HERMITIAN)
+        # NOTE: the following 3 blocks are equivalent to the cvs_p0 intermediates
+        # defined at the end of this file
         ret.oo = -0.5 * einsum("ikab,jkab->ij", self.t2oo, self.t2oo)
+        #ret.ov = -0.5 * (
+        #    + einsum("ijbc,jabc->ia", self.t2oo, hf.ovvv)
+        #    + einsum("jkib,jkab->ia", hf.ooov, self.t2oo)
+        #) / self.df(b.ov)
         ret.ov = self.ts2(b.ov)
         ret.vv = 0.5 * einsum("ijac,ijbc->ab", self.t2oo, self.t2oo)
 
@@ -196,9 +191,9 @@ class GroundState:
                 + einsum("kIab,kJab->IJ", self.t2oc, self.t2oc)
                 + einsum('LIab,LJab->IJ', self.t2cc, self.t2cc)
             )
-            ret.co = -0.5 * (
-                + einsum("kIab,kjab->Ij", self.t2oc, self.t2oo)
-                + einsum("ILab,jLab->Ij", self.t2cc, self.t2oc)
+            ret.oc = -0.5 * (
+                + einsum("kIab,kjab->jI", self.t2oc, self.t2oo)
+                + einsum("ILab,jLab->jI", self.t2cc, self.t2oc)
             )
             ret.cv = -0.5 * (
                 - einsum("jIbc,jabc->Ia", self.t2oc, hf.ovvv)
@@ -338,8 +333,7 @@ class GroundState:
         T2 amplitudes (i.e., 1st-order doubles amplitudes).
         """
         raise NotImplementedError("1st-order doubles amplitudes "
-                                  "not implemented for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")
 
     @cached_member_function
     def ts2(self, space: str):
@@ -347,16 +341,15 @@ class GroundState:
         Return the 2nd-order singles amplitudes.
         """
         raise NotImplementedError("2nd-order singles amplitudes "
-                                  "not implemented for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")
+
     @cached_member_function
     def td2(self, space: str):
         """
         Return the 2nd-order doubles amplitudes.
         """
         raise NotImplementedError("2nd-order doubles amplitudes "
-                                  "not implemented for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")
 
     @cached_member_function
     def tt2(self, space: str):
@@ -365,8 +358,7 @@ class GroundState:
         (e.g. o1o1o1v1v1v1).
         """
         raise NotImplementedError("2nd-order triples amplitudes "
-                                  "not implemented for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")
 
     @cached_member_function()
     def energy_correction(self, level=2):
@@ -375,8 +367,7 @@ class GroundState:
         theory.
         """
         raise NotImplementedError("Energy corrections "
-                                  "not defined for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")
 
     def energy(self, level=2):
         """
@@ -384,5 +375,4 @@ class GroundState:
         consistent through a particular level of perturbation theory.
         """
         raise NotImplementedError("Total energy "
-                                  "not defined for the GroundState "
-                                  "base class.")
+                                  f"not defined for {self.__class__}")

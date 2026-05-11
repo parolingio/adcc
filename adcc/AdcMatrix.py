@@ -25,6 +25,7 @@ import numpy as np
 
 import libadcc
 
+from .GrounState import GroundState
 from .LazyMp import LazyMp
 from .adc_pp import matrix as ppmatrix
 from .timings import Timer, timed_member_call
@@ -212,8 +213,8 @@ class AdcMatrix(AdcMatrixlike):
         ----------
         method : str or AdcMethod
             Method to use.
-        hf_or_mp : adcc.ReferenceState or adcc.LazyMp
-            HF reference or MP ground state
+        hf_or_mp : adcc.ReferenceState or adcc.GroundState
+            HF reference or MP ground state (MP or RE)
         block_orders : optional
             The order of perturbation theory to employ for each matrix block.
             If not set, defaults according to the selected ADC method are chosen.
@@ -222,12 +223,21 @@ class AdcMatrix(AdcMatrixlike):
         diagonal_precomputed: adcc.AmplitudeVector
             Allows to pass a pre-computed diagonal, for internal use only.
         """
+        # circular import -> can't import on top
+        from .LazyRe import LazyRe
+
         if isinstance(hf_or_mp, (libadcc.ReferenceState,
                                  libadcc.HartreeFockSolution_i)):
-            hf_or_mp = LazyMp(hf_or_mp)
-        if not isinstance(hf_or_mp, LazyMp):
+            if method.gs_type == "mp":
+                hf_or_mp = LazyMp(hf_or_mp)
+            elif method.gs_type == "re":
+                hf_or_mp = LazyRe(hf_or_mp, conv_tol=gs_conv_tol,
+                                  max_iter=gs_max_iter)
+            else:
+                raise ValueError(f"Unknown ground state type {method.gs_type}.")
+        if not isinstance(hf_or_mp, GroundState):
             raise TypeError("hf_or_mp is not a valid object. It needs to be "
-                            "either a LazyMp, a ReferenceState or a "
+                            "either a GroundState, a ReferenceState or a "
                             "HartreeFockSolution_i.")
 
         if not isinstance(method, AdcMethod):
@@ -247,6 +257,7 @@ class AdcMatrix(AdcMatrixlike):
         self.reference_state = hf_or_mp.reference_state
         self.mospaces = hf_or_mp.reference_state.mospaces
         self.is_core_valence_separated = method.is_core_valence_separated
+        self.gs_type = method.gs_type
         self.ndim = 2
         self.extra_terms = []
 
@@ -267,6 +278,8 @@ class AdcMatrix(AdcMatrixlike):
             variant = None
             if self.is_core_valence_separated:
                 variant = "cvs"
+            if self.gs_type != "mp":
+                variant.append(self.gs_type)
             blocks = {
                 block: ppmatrix.block(self.ground_state, block.split("_"),
                                       order=order, intermediates=self.intermediates,
