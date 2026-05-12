@@ -23,14 +23,15 @@
 from .functions import direct_sum, einsum
 from .GroundState import GroundState
 from .misc import cached_member_function
-from .OneParticleOperator import OneParticleOperator
+from .NParticleOperator import OperatorSymmetry
+from .OneParticleDensity import OneParticleDensity
 from .Intermediates import register_as_intermediate
 from .MoSpaces import split_spaces
 from . import block as b
 
 
 class LazyMp(GroundState):
-    @cached_member_function
+    @cached_member_function()
     def t2(self, space):
         """
         T2 amplitudes (i.e., 1st-order doubles amplitudes)
@@ -44,7 +45,7 @@ class LazyMp(GroundState):
             hf.eri(space) / direct_sum("ia+jb->ijab", eia, ejb).symmetrise((2, 3))
         )
 
-    @cached_member_function
+    @cached_member_function()
     def ts2(self, space):
         """
         Computes the 2nd-order singles amplitudes.
@@ -58,7 +59,7 @@ class LazyMp(GroundState):
             + einsum("jkib,jkab->ia", hf.ooov, self.t2oo)
         ) / self.df(b.ov)
 
-    @cached_member_function
+    @cached_member_function()
     def td2(self, space):
         """
         Return the 2nd-order doubles amplitudes.
@@ -104,7 +105,7 @@ class LazyMp(GroundState):
         ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
         return numerator / denom
 
-    @cached_member_function
+    @cached_member_function()
     def energy_correction(self, level=2):
         """
         Obtain the MP energy correction at a particular level.
@@ -189,7 +190,8 @@ class LazyMp(GroundState):
 @register_as_intermediate
 def cvs_p0(hf, mp, intermediates):
     # NOTE: equal to mp2_diffdm if CVS applied for the density
-    ret = OneParticleOperator(hf.mospaces, is_symmetric=True)
+    ret = OneParticleDensity(hf.mospaces, 
+                             symmetry=OperatorSymmetry.HERMITIAN)
     ret.oo = -0.5 * einsum("ikab,jkab->ij", mp.t2oo, mp.t2oo)
     ret.ov = -0.5 * (+ einsum("ijbc,jabc->ia", mp.t2oo, hf.ovvv)
                      + einsum("jkib,jkab->ia", hf.ooov, mp.t2oo)) / mp.df(b.ov)

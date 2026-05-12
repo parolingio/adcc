@@ -53,7 +53,7 @@ class LazyRe(GroundState):
         self.max_iter = max_iter
         super().__init__(hf)
 
-    @cached_member_function
+    @cached_member_function()
     def ts1(self, space):
         """
         First order RE ground state singles amplitudes.
@@ -63,7 +63,7 @@ class LazyRe(GroundState):
                                   "for a block diagonal fock matrix. Probably you "
                                   "don't need this tensor.")
 
-    @cached_member_function
+    @cached_member_function()
     def t2(self, space):
         """
         1st-order RE ground state doubles amplitudes.
@@ -95,7 +95,7 @@ class LazyRe(GroundState):
         t2 = t2.solution.pphh
         return t2
 
-    @cached_member_function
+    @cached_member_function()
     def ts2(self, space):
         """
         2nd-order RE ground state singles amplitudes.
@@ -130,7 +130,7 @@ class LazyRe(GroundState):
         t1 = t1.solution.ph
         return t1
 
-    @cached_member_function
+    @cached_member_function()
     def td2(self, space):
         """
         Second order RE ground state doubles amplitudes.
@@ -141,7 +141,7 @@ class LazyRe(GroundState):
                                   "for a block diagonal fock matrix. Probably you "
                                   "don't need this tensor.")
 
-    @cached_member_function
+    @cached_member_function()
     def energy_correction(self, level=2):
         """
         Obtain the RE energy correction at a particular level.

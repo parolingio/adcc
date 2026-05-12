@@ -23,10 +23,12 @@
 import libadcc
 import numpy as np
 
-from .functions import direct_sum, einsum, evaluate
+from .functions import direct_sum, einsum, evaluate, zeros_like
 from .misc import cached_member_function, cached_property
 from .MoSpaces import split_spaces
-from .OneParticleOperator import OneParticleOperator, product_trace
+from .NParticleOperator import product_trace, OperatorSymmetry
+from .OneParticleDensity import OneParticleDensity
+from .TwoParticleDensity import TwoParticleDensity
 from .ReferenceState import ReferenceState
 from .timings import Timer, timed_member_call
 from . import block as b
@@ -55,7 +57,7 @@ class GroundState:
         else:
             raise AttributeError
 
-    @cached_member_function
+    @cached_member_function()
     def df(self, space: str):
         """
         Delta Fock matrix.
@@ -66,7 +68,7 @@ class GroundState:
         fv = hf.fock(s2 + s2).diagonal()
         return direct_sum("-i+a->ia", fC, fv)
 
-    @cached_member_function
+    @cached_member_function()
     def t2eri(self, space: str, contraction):
         """
         Return the T2 tensor with ERI tensor contraction intermediates.
@@ -99,7 +101,7 @@ class GroundState:
         if level < 2:
             return self.reference_state.density
         elif level == 2:
-            return self.reference_state.density + self.second_order_diffdm
+            return self.reference_state.density + self.second_order_diffdm_correction
         else:
             raise NotImplementedError("Only densities up to 2nd-order"
                                      " are implemented.")
@@ -121,41 +123,41 @@ class GroundState:
         if level < 2:
             return self.reference_state.dipole_moment
         elif level == 2:
-            return self.reference_state.dipole_moment + 
-                                             self.second_order_dipole_moment
+            return (self.reference_state.dipole_moment +
+                                             self.second_order_dipole_moment_correction)
         else:
             raise NotImplementedError("Only dipole moments up to 2nd-order"
                                       " are implemented.")
 
     @cached_property
-    def second_order_dipole_moment(self):
+    def second_order_dipole_moment_correction(self):
         """
         Return the 2nd-order correction to the ground state dipole moment.
         """
         refstate = self.reference_state
         dipole_integrals = refstate.operators.electric_dipole
-        correction = -np.array([product_trace(comp, self.second_order_diffdm)
+        correction = -np.array([product_trace(comp, self.second_order_diffdm_correction)
                                 for comp in dipole_integrals])
         return correction
 
     def diffdm(self, level=2):
         """
-        Return the n-th order contribution to the ground state difference density
-        in the MO basis.
+        Return the n-th order contribution to the ground state difference
+        density in the MO basis.
         """
         if level < 2:
             raise NotImplementedError("The first non-vanishing contribution to "
                                       "the ground state difference density is "
                                       "in 2nd order.")
         elif level == 2:
-            return self.second_order_diffdm
+            return self.second_order_diffdm_correction
         else:
             raise NotImplementedError("Difference density only implemented for "
                                       "level 2.")
 
     @cached_property
     @timed_member_call(timer="timer")
-    def second_order_diffdm(self):
+    def second_order_diffdm_correction(self):
         """
         Return the 2nd-order difference density in the MO basis.
         """
@@ -210,7 +212,7 @@ class GroundState:
     @timed_member_call(timer="timer")
     def first_order_dm_correction_2p(self) -> TwoParticleDensity:
         """
-        Return the 1st-order correction to the two-particle difference density 
+        Return the 1st-order correction to the two-particle difference density
         in the MO basis.
         """
         ret = TwoParticleDensity(self.mospaces,
@@ -222,13 +224,13 @@ class GroundState:
     @timed_member_call(timer="timer")
     def second_order_dm_correction_2p(self) -> TwoParticleDensity:
         """
-        Return the 2nd-order correction to the two-particle difference density 
+        Return the 2nd-order correction to the two-particle difference density
         in the MO basis.
         """
         hf: ReferenceState = self.reference_state
         ret = TwoParticleDensity(self.mospaces,
                                  symmetry=OperatorSymmetry.HERMITIAN)
-        p0: OneParticleDensity = self.second_order_diffdm
+        p0: OneParticleDensity = self.second_order_diffdm_correction
 
         # constuct Kronecker Delta
         d_oo = zeros_like(hf.foo)
@@ -262,7 +264,7 @@ class GroundState:
         if level == 1:
             return self.first_order_dm_correction_2p
         elif level == 2:
-            return (self.mp1_dm_correction_2p
+            return (self.first_order_dm_correction_2p
                     + self.second_order_dm_correction_2p)
         else:
             raise NotImplementedError("Only first and second-order two-particle "
@@ -327,7 +329,7 @@ class GroundState:
 # definition of the partitioning scheme H = H_0 + H_1 
 # As such, they are only calculated by child classes LazyMp and LazyRe.
 
-    @cached_member_function
+    @cached_member_function()
     def t2(self, space: str):
         """
         T2 amplitudes (i.e., 1st-order doubles amplitudes).
@@ -335,7 +337,7 @@ class GroundState:
         raise NotImplementedError("1st-order doubles amplitudes "
                                   f"not defined for {self.__class__}")
 
-    @cached_member_function
+    @cached_member_function()
     def ts2(self, space: str):
         """
         Return the 2nd-order singles amplitudes.
@@ -343,7 +345,7 @@ class GroundState:
         raise NotImplementedError("2nd-order singles amplitudes "
                                   f"not defined for {self.__class__}")
 
-    @cached_member_function
+    @cached_member_function()
     def td2(self, space: str):
         """
         Return the 2nd-order doubles amplitudes.
@@ -351,7 +353,7 @@ class GroundState:
         raise NotImplementedError("2nd-order doubles amplitudes "
                                   f"not defined for {self.__class__}")
 
-    @cached_member_function
+    @cached_member_function()
     def tt2(self, space: str):
         """
         Return the 2nd-order triples amplitudes for the given space

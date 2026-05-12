@@ -91,6 +91,12 @@ class Method:
         # NOTE: added this to make the testdata generation ready for IP/EA
         self.adc_type: str = "pp"
 
+        # ground state
+        if "re" in split:
+            self.gs_type = "re"
+        else:
+            self.gs_type = "mp"
+
     def _validate_level(self, level: MethodLevel) -> None:
         if isinstance(level.value, int) and level.value <= self.max_level:
             return
