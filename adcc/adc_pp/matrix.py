@@ -76,6 +76,12 @@ def block(ground_state, spaces, order, variant=None, intermediates=None):
         raise ValueError("Cannot run a core-valence approximated ADC method on "
                          "top of a ground state without a "
                          "core-valence separation.")
+    if "re" in variant and "cvs" in variant:
+        raise NotImplementedError("Core-valence-approximated RE-ADC not "
+                                  "implemented.")
+    if "remp" in variant and "cvs" in variant:
+        raise NotImplementedError("Core-valence-approximated REMP-ADC not "
+                                  "implemented.")
 
     fn = "_".join(["block"] + variant + spaces + [str(order)])
 
@@ -104,6 +110,26 @@ def block_ph_ph_0(hf, mp, intermediates):
 
 
 block_cvs_ph_ph_0 = block_ph_ph_0
+
+
+def block_re_ph_ph_0(hf, re, intermediates):
+    # Identical to ADC(1)
+    return block_ph_ph_1(hf, re, intermediates)
+
+
+def block_remp_ph_ph_0(hf, remp, intermediates):
+    remp_A = remp.remp_A
+    diagonal = AmplitudeVector(ph=(
+                   direct_sum("a-i->ia", hf.fvv.diagonal(), hf.foo.diagonal())
+                   - (1-remp_A) * einsum("iaia->ia", hf.ovov)
+    ))
+    def apply(ampl):
+        return AmplitudeVector(ph=(
+            + einsum("ib,ab->ia", ampl.ph, hf.fvv)
+            - einsum("ja,ij->ia", ampl.ph, hf.foo)
+            - (1-remp_A) * einsum("jb,ibja->ia", ampl.ph, hf.ovov)
+        ))
+    return AdcBlock(apply, diagonal)
 
 
 def diagonal_pphh_pphh_0(hf):
@@ -135,6 +161,38 @@ def block_cvs_pphh_pphh_0(hf, mp, intermediates):
     return AdcBlock(apply, diagonal_pphh_pphh_0(hf))
 
 
+def block_re_pphh_pphh_0(hf, re, intermediates):
+    # Identical to ADC(1)
+    return block_pphh_pphh_1(hf, re, intermediates)
+
+
+def diagonal_remp_pphh_pphh_0(hf, remp_A):
+    # Fock matrix and ovov diagonal term (sometimes called "intermediate diagonal")
+    dinterm_ov = (direct_sum("a-i->ia", hf.fvv.diagonal(), hf.foo.diagonal())
+                  - 2.0 * (1-remp_A) * einsum("iaia->ia", hf.ovov)).evaluate()
+    dinterm_Cv = dinterm_ov
+    diag_oC = (1-remp_A) * einsum("ijij->ij", hf.oooo).symmetrise()
+    diag_vv = (1-remp_A) * einsum("abab->ab", hf.vvvv).symmetrise()
+    return AmplitudeVector(pphh=(
+        + direct_sum("ia+Jb->iJab", dinterm_ov, dinterm_Cv).symmetrise(2, 3)
+        + direct_sum("iJ+ab->iJab", diag_oC, diag_vv)
+    ))
+
+
+def block_remp_pphh_pphh_0(hf, remp, intermediates):
+    remp_A = remp.remp_A
+    def apply(ampl):
+        return AmplitudeVector(pphh=(
+          + 2 * einsum("jkab,ik->ijab", ampl.pphh, hf.foo).antisymmetrise(0, 1)
+          + 2 * einsum("ijac,bc->ijab", ampl.pphh, hf.fvv).antisymmetrise(2, 3)
+          + ( 4 * (1-remp_A) * einsum("jkac,ickb->ijab", ampl.pphh, hf.ovov)
+                                    ).antisymmetrise(0, 1).antisymmetrise(2, 3)
+          + 0.5 * (1-remp_A) * einsum("klab,ijkl->ijab", ampl.pphh, hf.oooo)
+          + 0.5 * (1-remp_A) * einsum("ijcd,abcd->ijab", ampl.pphh, hf.vvvv)
+        ))
+    return AdcBlock(apply, diagonal_remp_pphh_pphh_0(hf, remp_A))
+
+
 #
 # 0th order coupling
 #
@@ -148,6 +206,12 @@ def block_pphh_ph_0(hf, mp, intermediates):
 
 block_cvs_ph_pphh_0 = block_ph_pphh_0
 block_cvs_pphh_ph_0 = block_pphh_ph_0
+
+block_re_ph_pphh_0 = block_ph_pphh_0
+block_re_pphh_ph_0 = block_pphh_ph_0
+
+block_remp_ph_pphh_0 = block_ph_pphh_0
+block_remp_pphh_ph_0 = block_pphh_ph_0
 
 
 #
@@ -171,6 +235,26 @@ def block_ph_ph_1(hf, mp, intermediates):
 
 
 block_cvs_ph_ph_1 = block_ph_ph_1
+
+# no first order contribution for RE-ADC
+block_re_ph_ph_1 = block_re_ph_ph_0
+
+
+def block_remp_ph_ph_1(hf, remp, intermediates):
+    remp_A = remp.remp_A
+    diagonal = AmplitudeVector(ph=(
+                   # 0th
+                   direct_sum("a-i->ia", hf.fvv.diagonal(), hf.foo.diagonal())
+                   # 0th + 1st
+                   - einsum("iaia->ia", hf.ovov)
+    ))
+    def apply(ampl):
+        return AmplitudeVector(ph=(                    # PT order
+            + einsum("ib,ab->ia", ampl.ph, hf.fvv)     # 0th
+            - einsum("ja,ij->ia", ampl.ph, hf.foo)     # 0th
+            - einsum("jb,ibja->ia", ampl.ph, hf.ovov)  # 0th + 1st
+        ))
+    return AdcBlock(apply, diagonal)
 
 
 def diagonal_pphh_pphh_1(hf):
@@ -226,6 +310,41 @@ def block_cvs_pphh_pphh_1(hf, mp, intermediates):
     return AdcBlock(apply, diagonal_pphh_pphh_1(hf))
 
 
+block_re_pphh_pphh_1 = block_re_pphh_pphh_0
+
+
+def diagonal_remp_pphh_pphh_1(hf):
+    # Fock matrix and ovov diagonal term (sometimes called "intermediate diagonal")
+    # 1st-order contributions are all proportional to the REMP mixing paramter
+    # A, and sum up with 0th-order contributions carrying a (1-A) factor.
+    # Therefore, the current diagonal does not depend on the REMP A parameter.
+    dinterm_ov = (direct_sum("a-i->ia", hf.fvv.diagonal(), hf.foo.diagonal())
+                  - 2.0 * einsum("iaia->ia", hf.ovov)).evaluate()
+    diag_oo = einsum("ijij->ij", hf.oooo).symmetrise()
+    diag_vv = einsum("abab->ab", hf.vvvv).symmetrise()
+    return AmplitudeVector(pphh=(
+        + direct_sum("ia+jb->ijab", dinterm_ov, dinterm_ov).symmetrise(2, 3)
+        + direct_sum("ij+ab->ijab", diag_oo, diag_vv)
+    ))
+
+
+def block_remp_pphh_pphh_1(hf, remp, intermediates):
+    # 1st-order contributions are all proportional to the REMP mixing paramter
+    # A, and sum up with 0th-order contributions carrying a (1-A) factor.
+    # Therefore, the current block does not depend on the REMP A parameter.
+    def apply(ampl):
+        return AmplitudeVector(pphh=(
+          # 0th order
+          + 2 * einsum("jkab,ik->ijab", ampl.pphh, hf.foo).antisymmetrise(0, 1)
+          + 2 * einsum("ijac,bc->ijab", ampl.pphh, hf.fvv).antisymmetrise(2, 3)
+          # 0th + 1st order
+          + ( 4 * einsum("jkac,ickb->ijab", ampl.pphh, hf.ovov)
+                                    ).antisymmetrise(0, 1).antisymmetrise(2, 3)
+          + 0.5 * einsum("klab,ijkl->ijab", ampl.pphh, hf.oooo)
+          + 0.5 * einsum("ijcd,abcd->ijab", ampl.pphh, hf.vvvv)
+        ))
+    return AdcBlock(apply, diagonal_remp_pphh_pphh_1(hf))
+
 #
 # 1st order coupling
 #
@@ -247,6 +366,11 @@ def block_cvs_ph_pphh_1(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+block_re_ph_pphh_1 = block_ph_pphh_1
+
+block_remp_ph_pphh_1 = block_ph_pphh_1
+
+
 def block_pphh_ph_1(hf, mp, intermediates):
     def apply(ampl):
         return AmplitudeVector(pphh=(
@@ -264,6 +388,11 @@ def block_cvs_pphh_ph_1(hf, mp, intermediates):
             - 1 / sqrt(2) * einsum("Ic,jcab->jIab", ampl.ph, hf.ovvv)
         ))
     return AdcBlock(apply, 0)
+
+
+block_re_pphh_ph_1 = block_pphh_ph_1
+
+block_remp_pphh_ph_1 = block_pphh_ph_1
 
 
 #
@@ -310,6 +439,23 @@ def block_cvs_ph_ph_2(hf, mp, intermediates):
     return AdcBlock(apply, diagonal)
 
 
+def block_re_ph_ph_2(hf, re, intermediates):
+    m11 = intermediates.re_adc2_m11  # is already evaluated in __getattr__
+    diagonal = AmplitudeVector(ph=einsum('iaia->ia', m11))
+
+    def apply(ampl):
+        return AmplitudeVector(ph=einsum('iajb,jb->ia', m11, ampl.ph))
+    return AdcBlock(apply, diagonal)
+
+
+def block_remp_ph_ph_2(hf, remp, intermediates):
+    m11 = intermediates.remp_adc2_m11  # is already evaluated in __getattr__
+    diagonal = AmplitudeVector(ph=einsum('iaia->ia', m11))
+
+    def apply(ampl):
+        return AmplitudeVector(ph=einsum('iajb,jb->ia', m11, ampl.ph))
+    return AdcBlock(apply, diagonal)
+
 #
 # 2nd order coupling
 #
@@ -338,6 +484,88 @@ def block_cvs_ph_pphh_2(hf, mp, intermediates):
             - einsum("jIKa,ljcd,lKcd->Ia", hf.occv, mp.t2oo, ampl.pphh)
         ))
     return AdcBlock(apply, 0)
+
+
+def block_re_ph_pphh_2(hf, re, intermediates):
+    t2_1 = re.t2(b.oovv)
+    t1_2 = re.ts2(b.ov)
+
+    t2eri_A = intermediates.adc3_pia  # also includes the first order term
+    t2eri_B = intermediates.adc3_pib  # also includes the first order term
+
+    def apply(ampl):
+        ur2 = ampl.pphh
+        # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+        return AmplitudeVector(ph=(
+            # 2nd order
+            + 1 * einsum('icad,cd->ia', hf.ovvv,  # N^5: O^2V^3 / N^4: O^1V^3
+                         einsum('jkbc,jkbd->cd', ur2, t2_1))
+            + 1 * einsum('ilka,kl->ia', hf.ooov,  # N^5: O^3V^2 / N^4: O^2V^2
+                         einsum('jkbc,jlbc->kl', ur2, t2_1))
+            + 1 * einsum('ijbc,jabc->ia', ur2, t2eri_B)  # N^5: O^2V^3 / N^4: O^1V^3
+            - 1 * einsum('adbc,ibcd->ia', hf.vvvv,  # N^5: O^1V^4 / N^4: V^4
+                         einsum('ijbc,jd->ibcd', ur2, t1_2))
+            + 2 * einsum('jakb,ijkb->ia', hf.ovov,  # N^5: O^3V^2 / N^4: O^2V^2
+                         einsum('ijbc,kc->ijkb', ur2, t1_2))
+            - 1 * einsum('ijab,jb->ia', ur2,  # N^5: O^2V^3 / N^4: O^1V^3
+                         einsum('kbcd,jkcd->jb', hf.ovvv, t2_1))
+            - 1 * einsum('ijab,jb->ia', ur2,  # N^5: O^3V^2 / N^4: O^2V^2
+                         einsum('kljc,klbc->jb', hf.ooov, t2_1))
+            - 2 * einsum('ijab,jb->ia', ur2,  # N^4: O^2V^2 / N^4: O^2V^2
+                         einsum('bc,jc->jb', hf.fvv, t1_2))
+            + 2 * einsum('ijab,jb->ia', ur2,  # N^4: O^2V^2 / N^4: O^2V^2
+                         einsum('jckb,kc->jb', hf.ovov, t1_2))
+            + 2 * einsum('ijab,jb->ia', ur2,  # N^4: O^2V^2 / N^4: O^2V^2
+                         einsum('jk,kb->jb', hf.foo, t1_2))
+            + 1 * einsum('jkab,jkib->ia', ur2, t2eri_A)  # N^5: O^3V^2 / N^4: O^2V^2
+            - 1 * einsum('jkab,ijkb->ia', ur2,  # N^5: O^3V^2 / N^4: O^2V^2
+                         einsum('iljk,lb->ijkb', hf.oooo, t1_2))
+            + 2 * einsum('jkab,ijkb->ia', ur2,  # N^5: O^3V^2 / N^4: O^2V^2
+                         einsum('ibjc,kc->ijkb', hf.ovov, t1_2))
+        ))
+    return AdcBlock(apply, 0)
+
+
+def block_remp_ph_pphh_2(hf, remp, intermediates):
+    remp_A = remp.remp_A
+    t2_1 = remp.t2(b.oovv)
+    t1_2 = remp.ts2(b.ov)
+
+    # CHECK !!!!!!!!!!!!!!!!!!!!!
+    # Not clear to me what it does, as adc3_pia and adc_pib seem to be both
+    # defined wrt a MP gaoud state (see below)....
+    t2eri_A = intermediates.adc3_pia  # also includes the first order term
+    t2eri_B = intermediates.adc3_pib  # also includes the first order term
+
+    def apply(ampl):
+        ur2 = ampl.pphh
+        # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+        return AmplitudeVector(ph=(
+            # 1st order
+            + einsum("jkib,jkab->ia", hf.ooov, ur2)
+            + einsum("ijbc,jabc->ia", ur2, hf.ovvv)
+            # 2nd order
+            + 1 * einsum("ijbc,jabc->ia", ur2, t2eri_B)  # N^5: O^2V^3 / N^4: O^1V^3
+            - 1 * einsum("jkab,jkib->ia", ur2, t2eri_A)  # N^5: O^3V^2 / N^4: O^2V^2
+            + 1 * einsum("kl,ilka->ia",
+                         einsum("jkbc,jlbc->kl", ur2, t2_1), hf.ooov)  # N^5: O^3V^2 / N^4: O^2V^2
+            + 1 * einsum("cd,icad->ia",
+                         einsum("jkbc,jkbd->cd", ur2, t2_1), hf.ovvv)  # N^5: O^2V^3 / N^4: O^1V^3
+            - 1 * einsum("jb,ijab->ia", einsum("klbc,kljc->jb", t2_1, hf.ooov), ur2)  # N^5: O^3V^2 / N^4: O^2V^2
+            - 1 * einsum("jb,ijab->ia", einsum("jkcd,kbcd->jb", t2_1, hf.ovvv), ur2)  # N^5: O^2V^3 / N^4: O^1V^3
+            - 2 * einsum("jb,ijab->ia", einsum("jc,bc->jb", t1_2, hf.fvv), ur2)  # N^4: O^2V^2 / N^4: O^2V^2
+            + 2 * einsum("jb,ijab->ia", einsum("kb,jk->jb", t1_2, hf.foo), ur2)  # N^4: O^2V^2 / N^4: O^2V^2
+            + 2 * einsum("ijkb,jkab->ia", einsum("kc,ibjc->ijkb", t1_2, hf.ovov), ur2)  # N^5: O^3V^2 / N^4: O^2V^2
+            + 2 * einsum("ijkb,jakb->ia", einsum("ijbc,kc->ijkb", ur2, t1_2), hf.ovov)  # N^5: O^3V^2 / N^4: O^2V^2
+            - (1 - remp_A) * einsum("jkla,iljk->ia", einsum("jkab,lb->jkla", ur2, t1_2), hf.oooo)  # N^5: O^3V^2 / N^4: O^2V^2
+            - (1 - remp_A) * einsum("ibcd,adbc->ia", einsum("ijbc,jd->ibcd", ur2, t1_2), hf.vvvv)  # N^5: O^1V^4 / N^4: V^4
+            + 2 * (1 - remp_A) * einsum("jb,ijab->ia", einsum("kc,jckb->jb", t1_2, hf.ovov), ur2)  # N^4: O^2V^2 / N^4: O^2V^2
+            + 2 * A * einsum("ijkb,jkab->ia", einsum("jc,ibkc->ijkb", t1_2, hf.ovov), ur2)  # N^5: O^3V^2 / N^4: O^2V^2
+            + 2 * A * einsum("ijkc,jakc->ia", einsum("ijbc,kb->ijkc", ur2, t1_2), hf.ovov)  # N^5: O^3V^2 / N^4: O^2V^2
+        ))
+    return AdcBlock(apply, 0)
+
+    raise NotImplementedError("Implementiation not completed")
 
 
 def block_pphh_ph_2(hf, mp, intermediates):
@@ -371,6 +599,52 @@ def block_cvs_pphh_ph_2(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+def block_re_pphh_ph_2(hf, re, intermediates):
+    t2_1 = re.t2(b.oovv)
+    t1_2 = re.ts2(b.ov)
+
+    t2eri_A = intermediates.adc3_pia  # also includes first order term
+    t2eri_B = intermediates.adc3_pib  # also includes first order term
+
+    def apply(ampl):
+        ur1 = ampl.ph
+        # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+        return AmplitudeVector(pphh=(
+            # 2nd order
+            + 2 * (
+                + 0.5 * einsum('ijad,bd->ijab', t2_1,  # N^5: O^2V^3 / N^4: O^1V^3
+                               einsum('kbcd,kc->bd', hf.ovvv, ur1))
+                + 0.5 * einsum('ilab,jl->ijab', t2_1,  # N^5: O^3V^2 / N^4: O^2V^2
+                               einsum('kljc,kc->jl', hf.ooov, ur1))
+                # N^5: O^2V^3 / N^4: O^1V^3
+                + 0.5 * einsum('ic,jcab->ijab', ur1, t2eri_B)
+                + 0.5 * einsum('id,jabd->ijab', t1_2,  # N^5: O^1V^4 / N^4: V^4
+                               einsum('abcd,jc->jabd', hf.vvvv, ur1))
+                # N^5: O^3V^2 / N^4: O^2V^2
+                - 0.5 * einsum('kb,ijka->ijab', ur1, t2eri_A)
+                + 0.5 * einsum('la,ijlb->ijab', t1_2,  # N^5: O^3V^2 / N^4: O^2V^2
+                               einsum('ijkl,kb->ijlb', hf.oooo, ur1))
+            )
+            + 4 * (
+                + 0.5 * einsum('ka,ijkb->ijab', t1_2,  # N^5: O^3V^2 / N^4: O^2V^2
+                               einsum('ickb,jc->ijkb', hf.ovov, ur1))
+                + 0.5 * einsum('jb,ia->ijab', ur1,  # N^4: O^2V^2 / N^4: O^2V^2
+                               einsum('icka,kc->ia', hf.ovov, t1_2))
+                + 0.5 * einsum('ia,jb->ijab', ur1,  # N^4: O^2V^2 / N^4: O^2V^2
+                               einsum('jk,kb->jb', hf.foo, t1_2))
+                + 0.5 * einsum('ja,ib->ijab', ur1,  # N^4: O^2V^2 / N^4: O^2V^2
+                               einsum('bc,ic->ib', hf.fvv, t1_2))
+                - 0.25 * einsum('jb,ia->ijab', ur1,  # N^5: O^2V^3 / N^4: O^1V^3
+                                einsum('kacd,ikcd->ia', hf.ovvv, t2_1))
+                - 0.25 * einsum('jb,ia->ijab', ur1,  # N^5: O^3V^2 / N^4: O^2V^2
+                                einsum('klic,klac->ia', hf.ooov, t2_1))
+                + 0.5 * einsum('ka,ijkb->ijab', ur1,  # N^5: O^3V^2 / N^4: O^2V^2
+                               einsum('ickb,jc->ijkb', hf.ovov, t1_2))
+            )
+        ).antisymmetrise(0, 1).antisymmetrise(2, 3))
+    return AdcBlock(apply, 0)
+
+
 #
 # 3rd order main
 #
@@ -387,6 +661,16 @@ def block_ph_ph_3(hf, mp, intermediates):
 
 
 block_cvs_ph_ph_3 = block_ph_ph_3
+
+
+def block_re_ph_ph_3(hf, re, intermediates):
+    m11 = intermediates.re_adc3_m11
+
+    diagonal = AmplitudeVector(ph=einsum("iaia->ia", m11))
+
+    def apply(ampl):
+        return AmplitudeVector(ph=einsum("iajb,jb->ia", m11, ampl.ph))
+    return AdcBlock(apply, diagonal)
 
 
 #
@@ -554,3 +838,218 @@ def adc3_pib(hf, mp, intermediates):
         + 2.0 * mp.t2eri(b.ovvv, b.ov).antisymmetrise(2, 3)  # 2nd order
         - 0.5 * mp.t2eri(b.ovvv, b.oo)                       # 2nd order
     )
+
+
+@register_as_intermediate
+def re_adc2_m11(hf, re, intermediates):
+    t2_1 = re.t2(b.oovv)
+
+    p0 = re.diffdm(2)
+    p0_2_oo = p0.oo
+    p0_2_vv = p0.vv
+
+    t2eri_3 = re.t2eri(b.oovv, b.oo)
+    t2eri_4 = re.t2eri(b.oovv, b.ov)
+    t2eri_5 = re.t2eri(b.oovv, b.vv)
+
+    t2sq = einsum("ikac,jkbc->iajb", t2_1, t2_1).evaluate()
+
+    # Build two Kronecker deltas
+    d_oo = zeros_like(hf.foo)
+    d_vv = zeros_like(hf.fvv)
+    d_oo.set_mask("ii", 1.0)
+    d_vv.set_mask("aa", 1.0)
+
+    return (
+        # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+        # 0th order contributions:
+        - 1 * einsum('ij,ab->iajb', hf.foo, d_vv)  # N^4: O^2V^2 / N^4: O^2V^2
+        + 1 * einsum('ab,ij->iajb', hf.fvv, d_oo)  # N^4: O^2V^2 / N^4: O^2V^2
+        - 1 * einsum('ibja->iajb', hf.ovov)  # N^4: O^2V^2 / N^4: O^2V^2
+        # 2nd order contributions:
+        + 2 * (  # terms with (1 + P_ab P_ij)
+            # N^5: O^2V^3 / N^4: O^2V^2
+            + 0.5 * einsum('ibjc,ac->iajb', hf.ovov, p0_2_vv)
+            # N^6: O^3V^3 / N^4: O^2V^2
+            - 1 * einsum('ibkc,jcka->iajb', hf.ovov, t2sq)
+            # N^5: O^3V^2 / N^4: O^2V^2
+            - 0.5 * einsum('ibka,jk->iajb', hf.ovov, p0_2_oo)
+        )
+        + 1 * einsum('ikac,jkbc->iajb', t2_1, t2eri_4)  # N^6: O^3V^3 / N^4: O^2V^2
+        + 1 * einsum('ikac,kjcb->iajb', t2_1, t2eri_4)  # N^6: O^3V^3 / N^4: O^2V^2
+        + 0.5 * einsum('bc,iajc->iajb', hf.fvv, t2sq)  # N^5: O^2V^3 / N^4: O^2V^2
+        + 0.5 * einsum('ik,jbka->iajb', hf.foo, t2sq)  # N^5: O^3V^2 / N^4: O^2V^2
+        # N^6: O^3V^3 / N^4: O^2V^2
+        + 0.5 * einsum('ikac,jkbc->iajb', t2_1, t2eri_3)
+        # N^6: O^3V^3 / N^4: O^2V^2
+        + 0.5 * einsum('ikac,jkbc->iajb', t2_1, t2eri_5)
+        # N^6: O^3V^3 / N^4: O^2V^2
+        + 0.5 * einsum('jkbc,ikca->iajb', t2_1, t2eri_4)
+        - 1 * einsum('adbc,icjd->iajb', hf.vvvv, t2sq)  # N^6: O^2V^4 / N^4: V^4
+        - 1 * einsum('iljk,kalb->iajb', hf.oooo, t2sq)  # N^6: O^4V^2 / N^4: O^2V^2
+        - 1 * einsum('jkbc,ikac->iajb', hf.oovv, t2_1)  # N^6: O^3V^3 / N^4: O^2V^2
+        - 0.5 * einsum('ac,icjb->iajb', hf.fvv, t2sq)  # N^5: O^2V^3 / N^4: O^2V^2
+        - 0.5 * einsum('jk,iakb->iajb', hf.foo, t2sq)  # N^5: O^3V^2 / N^4: O^2V^2
+        # N^6: O^3V^3 / N^4: O^2V^2
+        - 0.5 * einsum('ikac,jkcb->iajb', t2_1, t2eri_4)
+        + 0.5 * einsum('icjd,abcd->iajb', hf.ovov,  # N^6: O^2V^4 / N^4: V^4
+                       einsum('klac,klbd->abcd', t2_1, t2_1))
+        + 0.5 * einsum('kalb,ijkl->iajb', hf.ovov,  # N^6: O^4V^2 / N^4: O^2V^2
+                       einsum('ikcd,jlcd->ijkl', t2_1, t2_1))
+        + 1 * einsum('ij,ab->iajb', d_oo,  # N^4: V^4 / N^4: V^4
+                     einsum('adbc,cd->ab', hf.vvvv, p0_2_vv))
+        + 1 * einsum('ij,ab->iajb', d_oo,  # N^4: O^2V^2 / N^4: O^2V^2
+                     einsum('kalb,kl->ab', hf.ovov, p0_2_oo))
+        + 1 * einsum('ij,ab->iajb', d_oo,  # N^5: O^2V^3 / N^4: O^2V^2
+                     einsum('klac,klcb->ab', t2_1, t2eri_4))
+        + 0.5 * einsum('ij,ab->iajb', d_oo,  # N^5: O^2V^3 / N^4: O^2V^2
+                       einsum('klbc,klac->ab', hf.oovv, t2_1))
+        + 0.5 * einsum('ij,ab->iajb', d_oo,  # N^4: O^2V^2 / N^4: O^2V^2
+                       einsum('ac,bc->ab', hf.fvv, p0_2_vv))
+        - 0.5 * einsum('ij,ab->iajb', d_oo,  # N^4: O^2V^2 / N^4: O^2V^2
+                       einsum('bc,ac->ab', hf.fvv, p0_2_vv))
+        - 0.25 * einsum('ij,ab->iajb', d_oo,  # N^5: O^2V^3 / N^4: O^2V^2
+                        einsum('klac,klbc->ab', t2_1, t2eri_5))
+        + 1 * einsum('ab,ij->iajb', d_vv,  # N^5: O^3V^2 / N^4: O^2V^2
+                     einsum('ikcd,jkdc->ij', t2_1, t2eri_4))
+        + 0.5 * einsum('ab,ij->iajb', d_vv,  # N^5: O^3V^2 / N^4: O^2V^2
+                       einsum('jkcd,ikcd->ij', hf.oovv, t2_1))
+        + 0.5 * einsum('ab,ij->iajb', d_vv,  # N^4: O^2V^2 / N^4: O^2V^2
+                       einsum('ik,jk->ij', hf.foo, p0_2_oo))
+        - 1 * einsum('ab,ij->iajb', d_vv,  # N^4: O^2V^2 / N^4: O^2V^2
+                     einsum('icjd,cd->ij', hf.ovov, p0_2_vv))
+        - 1 * einsum('ab,ij->iajb', d_vv,  # N^4: O^2V^2 / N^4: O^2V^2
+                     einsum('iljk,kl->ij', hf.oooo, p0_2_oo))
+        - 0.5 * einsum('ab,ij->iajb', d_vv,  # N^4: O^2V^2 / N^4: O^2V^2
+                       einsum('jk,ik->ij', hf.foo, p0_2_oo))
+        - 0.25 * einsum('ab,ij->iajb', d_vv,  # N^5: O^3V^2 / N^4: O^2V^2
+                        einsum('ikcd,jkcd->ij', t2_1, t2eri_3))
+    ).symmetrise((0, 2), (1, 3))
+
+
+@register_as_intermediate
+def re_adc3_m11(hf, re, intermediates):
+    t1_2 = re.ts2(b.ov)
+
+    # Build two Kronecker deltas
+    d_oo = zeros_like(hf.foo)
+    d_vv = zeros_like(hf.fvv)
+    d_oo.set_mask("ii", 1.0)
+    d_vv.set_mask("aa", 1.0)
+
+    return (
+        # evaluate the 0th, 1st and 2nd order contributions on the fly
+        # avoids caching of the re_adc2_m11 intermediate, which should not be
+        # required for a re-adc3 calculation
+        re_adc2_m11(hf, re, intermediates)
+        + 2 * (
+            # N^5: O^2V^3 / N^4: O^1V^3
+            + 1 * einsum('ibac,jc->iajb', hf.ovvv, t1_2)
+            # N^5: O^3V^2 / N^4: O^2V^2
+            + 1 * einsum('ikja,kb->iajb', hf.ooov, t1_2)
+            - 1 * einsum('ij,ab->iajb', d_oo,  # N^4: O^1V^3 / N^4: O^1V^3
+                         einsum('kabc,kc->ab', hf.ovvv, t1_2))
+            - 1 * einsum('ab,ij->iajb', d_vv,  # N^4: O^2V^2 / N^4: O^2V^2
+                         einsum('ikjc,kc->ij', hf.ooov, t1_2))
+        ).symmetrise((0, 2), (1, 3))
+    )
+
+
+@register_as_intermediate
+def remp_adc2_m11(hf, remp, intermediates):
+    remp_A = remp.remp_A
+    t2_1 = remp.t2(b.oovv)
+
+    p0 = remp.diffdm(2)
+    p0_2_oo = p0.oo
+    p0_2_vv = p0.vv
+
+    t2eri_3 = remp.t2eri(b.oovv, b.oo)
+    t2eri_4 = remp.t2eri(b.oovv, b.ov)
+    t2eri_5 = remp.t2eri(b.oovv, b.vv)
+
+    t2sq = einsum("ikac,jkbc->iajb", t2_1, t2_1).evaluate()
+
+    # Build two Kronecker deltas
+    d_oo = zeros_like(hf.foo)
+    d_vv = zeros_like(hf.fvv)
+    d_oo.set_mask("ii", 1.0)
+    d_vv.set_mask("aa", 1.0)
+
+    def apply(ampl):
+        return (
+        # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+        # 0th + 1st order contributions:
+        + 1 * einsum("ab,ij->iajb", hf.fvv, d_oo)  # N^4: O^2V^2 / N^4: O^2V^2
+        - 1 * einsum("ij,ab->iajb", hf.foo, d_vv)  # N^4: O^2V^2 / N^4: O^2V^2
+        - 1 * einsum("ibja->iajb", hf.ovov)  # N^4: O^2V^2 / N^4: O^2V^2
+        # 2nd order contributions:
+        + (1 - remp_A) * (
+            # N^6: O^3V^3 / N^4: O^2V^2
+            einsum("jkbc,ikac->iajb", t2_1, t2eri_4)
+            + einsum("jkbc,kica->iajb", t2_1, t2eri_4)
+            + 0.5 * einsum("ikac,jkcb->iajb", t2_1, t2eri_4)
+            + 0.5 * einsum("jkbc,ikac->iajb", t2_1, t2eri_3)
+            + 0.5 * einsum("jkbc,ikac->iajb", t2_1, t2eri_5)
+            - 0.5 * einsum("jkbc,ikca->iajb", t2_1, t2eri_4)
+            # N^6: O^2V^4 / N^4: V^4
+            - einsum("adbc,icjd->iajb", hf.vvvv, t2sq)
+            + 0.5 * einsum("abcd,icjd->iajb",
+                           einsum("klac,klbd->abcd", t2_1, t2_1), hf.ovov)
+            # N^6: O^4V^2 / N^4: O^2V^2
+            - einsum("iljk,kalb->iajb", hf.oooo, t2sq)
+            + 0.5 * einsum("ijkl,kalb->iajb",
+                           einsum("ikcd,jlcd->ijkl", t2_1, t2_1), hf.ovov)
+            # N^5: O^2V^3 / N^4: O^2V^2
+            - einsum("ab,ij->iajb",
+                     einsum("klbc,lkca->ab", t2_1, t2eri_4), d_oo)
+            - 0.25 * einsum("ab,ij->iajb",
+                            einsum("klbc,klac->ab", t2_1, t2eri_5), d_oo)
+            # N^5: O^3V^2 / N^4: O^2V^2
+            - einsum("ij,ab->iajb",
+                     einsum("jkcd,ikcd->ij", t2_1, t2eri_4), d_vv)
+            - 0.25 * einsum("ij,ab->iajb",
+                            einsum("jkcd,ikcd->ij", t2_1, t2eri_3), d_vv)
+            # N^4: V^4 / N^4: V^4
+            + einsum("ab,ij->iajb",
+                     einsum("adbc,cd->ab", hf.vvvv, p0_2_vv), d_oo)
+            # N^4: O^2V^2 / N^4: O^2V^2
+            + einsum("ab,ij->iajb",
+                     einsum("kalb,kl->ab", hf.ovov, p0_2_oo), d_oo)
+            - einsum("ij,ab->iajb",
+                     einsum("icjd,cd->ij", hf.ovov, p0_2_vv), d_vv)
+            - einsum("ij,ab->iajb",
+                     einsum("iljk,kl->ij", hf.oooo, p0_2_oo), d_vv)
+            )
+        # N^6: O^3V^3 / N^4: O^2V^2
+        - 1 * einsum("jkbc,ikac->iajb", t2_1, hf.oovv)
+        # N^5: O^2V^3 / N^4: O^2V^2
+        + 0.5 * einsum("ac,icjb->iajb", hf.fvv, t2sq)
+        - 0.5 * einsum("bc,iajc->iajb", hf.fvv, t2sq)
+        + 0.5 * einsum("ab,ij->iajb",
+                       einsum("klbc,klac->ab", t2_1, hf.oovv), d_oo)
+        # N^5: O^3V^2 / N^4: O^2V^2
+        + 0.5 * einsum("jk,iakb->iajb", hf.foo, t2sq)
+        - 0.5 * einsum("ik,jbka->iajb", hf.foo, t2sq)
+        + 0.5 * einsum("ij,ab->iajb",
+                       einsum("jkcd,ikcd->ij", t2_1, hf.oovv), d_vv)
+        # N^4: O^2V^2 / N^4: O^2V^2
+        + 0.5 * einsum("ab,ij->iajb",
+                       einsum("bc,ac->ab", hf.fvv, p0_2_vv), d_oo)
+        + 0.5 * einsum("ij,ab->iajb",
+                       einsum("jk,ik->ij", hf.foo, p0_2_oo), d_vv)
+        - 0.5 * einsum("ab,ij->iajb",
+                       einsum("ac,bc->ab", hf.fvv, p0_2_vv), d_oo)
+        - 0.5 * einsum("ij,ab->iajb",
+                       einsum("ik,jk->ij", hf.foo, p0_2_oo), d_vv)
+        # terms with (1 + P_ab P_ij)
+        + 2 * (1 - remp_A) * (
+            # N^6: O^3V^3 / N^4: O^2V^2
+            - 1 * einsum("ibkc,jcka->iajb", hf.ovov, t2sq)
+            # N^5: O^2V^3 / N^4: O^2V^2
+            + 0.5 * einsum("ibjc,ac->iajb", hf.ovov, p0_2_vv)
+            # N^5: O^3V^2 / N^4: O^2V^2
+            - 0.5 * einsum("ibka,jk->iajb", hf.ovov, p0_2_oo)
+        )).symmetrise((0, 2), (1, 3))
+    return AdcBlock(apply, diagonal)
+
