@@ -20,6 +20,9 @@ _testdata_dirname = "data"
 _methods = {
     "pp": ("adc0", "adc1", "adc2", "adc2x", "adc3")
 }
+_small_cases_methods = {
+    "pp": _methods["pp"] + ("adc4",)
+}
 
 
 def generate_adc(test_case: testcases.TestCase, method: AdcMethod, case: str,
@@ -46,6 +49,9 @@ def generate_adc(test_case: testcases.TestCase, method: AdcMethod, case: str,
     key = f"{case}/{gs_density_order}"
     if f"{key}/{kind}" in hdf5_file:
         return None
+    # CVS-ADC(4) not available
+    if "cvs" in case and method.name == "adc4":
+        return None
     print(f"Generating {method.name} data for {case} {test_case.file_name}.")
     # prepend cvs to the method if needed (otherwise we will get an error)
     if "cvs" in case and not method.is_core_valence_separated:
@@ -67,7 +73,8 @@ def generate_adc(test_case: testcases.TestCase, method: AdcMethod, case: str,
         dump_matrix_testdata(states.matrix, trial_vec, matrix_group)
     # dump the excited states data
     kind_group = hdf5_file.create_group(f"{key}/{states.kind}")  # type: ignore
-    dump_excited_states(states, kind_group, dump_nstates=dump_nstates)
+    dump_excited_states(states, kind_group, only_full_mode=test_case.only_full_mode,
+                        dump_nstates=dump_nstates)
 
 
 def generate_adc_all(test_case: testcases.TestCase, method: AdcMethod,
@@ -121,12 +128,12 @@ def generate_h2o_sto3g():
     }
     test_case = testcases.get(n_expected_cases=1, name="h2o", basis="sto-3g").pop()
     generate_groundstate(test_case)
-    for method in _methods["pp"]:
+    for method in _small_cases_methods["pp"]:
         method = AdcMethod(method)
         for n_states in \
                 testcases.kinds_to_nstates(test_case.kinds[method.adc_type]):
             per_case = None
-            if method.level < 2:  # adc0/adc1
+            if method.level.to_int() < 2:  # adc0/adc1
                 per_case = {
                     case: {n_states: n} for case, n in states_per_case.items()
                 }
@@ -135,7 +142,7 @@ def generate_h2o_sto3g():
             # 4 states available
             # -> reduce n_guesses for all ADC(2) and ADC(3) calculations
             kwargs = {}
-            if method.level >= 2:
+            if method.level.to_int() >= 2:
                 kwargs = {"n_guesses": 4}
             generate_adc_all(
                 test_case, method=method, dump_nstates=2, states_per_case=per_case,
@@ -164,7 +171,7 @@ def generate_cn_sto3g():
     # UHF, Doublet, 10 basis functions: (7a, 6b) occ, (3a, 4b) virt
     test_case = testcases.get(n_expected_cases=1, name="cn", basis="sto-3g").pop()
     generate_groundstate(test_case)
-    for method in _methods["pp"]:
+    for method in _small_cases_methods["pp"]:
         method = AdcMethod(method)
         for n_states in \
                 testcases.kinds_to_nstates(test_case.kinds[method.adc_type]):
@@ -194,7 +201,7 @@ def generate_hf_631g():
     # UHF, Triplet
     test_case = testcases.get(n_expected_cases=1, name="hf").pop()
     generate_groundstate(test_case)
-    for method in _methods["pp"]:
+    for method in _small_cases_methods["pp"]:
         method = AdcMethod(method)
         for n_states in \
                 testcases.kinds_to_nstates(test_case.kinds[method.adc_type]):

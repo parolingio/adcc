@@ -2,7 +2,7 @@
 ## vi: tabstop=4 shiftwidth=4 softtabstop=4 expandtab
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2019 by the adcc authors
+## Copyright (C) 2026 by the adcc authors
 ##
 ## This file is part of adcc.
 ##
@@ -20,48 +20,195 @@
 ## along with adcc. If not, see <http://www.gnu.org/licenses/>.
 ##
 ## ---------------------------------------------------------------------
-import libadcc
-import numpy as np
-
-from .functions import direct_sum, einsum, evaluate, zeros_like
-from .misc import cached_member_function, cached_property
-from .MoSpaces import split_spaces
-from .NParticleOperator import product_trace, OperatorSymmetry
+from .MoSpaces import MoSpaces, split_spaces
+from .NParticleOperator import OperatorSymmetry, product_trace
 from .OneParticleDensity import OneParticleDensity
-from .TwoParticleDensity import TwoParticleDensity
 from .ReferenceState import ReferenceState
-from .timings import Timer, timed_member_call
+from .TwoParticleDensity import TwoParticleDensity
+from .functions import direct_sum, einsum, zeros_like
+from .misc import cached_member_function, cached_property
+from .timings import Timer
 from . import block as b
+
+import libadcc
+
+from typing import Union
+import numpy as np
 
 
 class GroundState:
-    def __init__(self, hf):
-        """
-        Base class for ground states.
-        """
+    """
+    Base class representing the ground state.
+    """
+    def __init__(self, hf: Union[ReferenceState, libadcc.HartreeFockSolution_i]):
         if isinstance(hf, libadcc.HartreeFockSolution_i):
             hf = ReferenceState(hf)
         if not isinstance(hf, ReferenceState):
-            raise TypeError("hf needs to be a ReferenceState "
-                            "or a HartreeFockSolution_i")
-        self.reference_state = hf
-        self.mospaces = hf.mospaces
-        self.timer = Timer()
-        self.has_core_occupied_space = hf.has_core_occupied_space
+            raise TypeError("hf needs to be a 'ReferenceState' "
+                            "or a 'HartreeFockSolution_i'")
+        self.reference_state: ReferenceState = hf
+        self.mospaces: MoSpaces = hf.mospaces
+        self.timer: Timer = Timer()
+        self.has_core_occupied_space: bool = hf.has_core_occupied_space
 
-    def __getattr__(self, attr):
-        # Shortcut some quantities, which are needed most often
-        if attr.startswith("t2") and len(attr) == 4:  # t2oo, t2oc, t2cc
-            xxvv = b.__getattr__(attr[2:4] + "vv")
-            return self.t2(xxvv)
+    def td1(self, space: str) -> libadcc.Tensor:
+        """First-order ground state doubles amplitudes."""
+        raise NotImplementedError(
+            "First-order ground state doubles amplitudes not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def t2(self, space: str) -> libadcc.Tensor:
+        """Alias for td1 for backwards compatiblity."""
+        return self.td1(space)
+
+    @property
+    def t2oo(self) -> libadcc.Tensor:
+        return self.td1(b.oovv)
+
+    @property
+    def t2oc(self) -> libadcc.Tensor:
+        return self.td1(b.ocvv)
+
+    @property
+    def t2cc(self) -> libadcc.Tensor:
+        return self.td1(b.ccvv)
+
+    def ts2(self, space: str, apply_cvs: bool = False) -> libadcc.Tensor:
+        """Second-order ground state singles amplitudes"""
+        # NOTE: In contrast to the other amplitudes, ts2 has the additional
+        # apply_cvs argument, since ts2 corresponds to the OV/CV block of the
+        # second order 1p density correction.
+        raise NotImplementedError(
+            "Second-order ground state singles amplitudes not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def td2(self, space: str) -> libadcc.Tensor:
+        """Second-order ground state doubles amplitudes"""
+        raise NotImplementedError(
+            "Second-order ground state doubles amplitudes not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def tt2(self, space: str) -> libadcc.Tensor:
+        """Second-order ground state triples amplitudes"""
+        raise NotImplementedError(
+            "Second-order ground state triples amplitudes not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def energy_correction(self, level: int = 2) -> float:
+        """Obtain the ground state energy correction at a particular level"""
+        raise NotImplementedError(
+            "Ground state energy corrections not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def energy(self, level: int = 2) -> float:
+        """
+        Obtain the total energy (SCF energy plus all corrections)
+        at a particular level of perturbation theory.
+        """
+        raise NotImplementedError(
+            "Ground state energy not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    def diffdm(self, level: int = 2, apply_cvs: bool = False) -> OneParticleDensity:
+        """
+        Return the ground state difference denstiy in the MO basis
+        with all corrections up to the specified order of perturbation theory.
+        """
+        if level >= 0 and level < 2:
+            raise ValueError(f"Difference density of order {level} vanishes.")
+        elif level == 2:
+            return self.second_order_dm_correction(apply_cvs=apply_cvs)
+        elif level == 3:
+            return (
+                self.second_order_dm_correction(apply_cvs=apply_cvs)
+                + self.third_order_dm_correction(apply_cvs=apply_cvs)
+            )
         else:
-            raise AttributeError
+            raise NotImplementedError(
+                "Only second-order density correction is implemented. "
+                f"diffdm of level {level} is not available."
+            )
+
+    def density(self, level: int = 2,
+                apply_cvs: bool = False) -> OneParticleDensity:
+        """
+        Return the ground state density in the MO basis with all corrections
+        up to the specified order of perturbation theory.
+        """
+        if level in [0, 1]:
+            return self.reference_state.density
+        diffdm = self.diffdm(level, apply_cvs=apply_cvs)
+        return self.reference_state.density + diffdm
+
+    def diffdm_2p(self, level: int = 2,
+                  apply_cvs: bool = False) -> TwoParticleDensity:
+        """
+        Return the two-particle ground state difference density in the MO basis
+        with all corrections up to the specified order of perturbation theory.
+        """
+        if level == 0:
+            raise ValueError("Zeroth-order 2-particle difference density vanishes.")
+        elif level == 1:
+            return self.first_order_dm_correction_2p(apply_cvs=apply_cvs)
+        elif level == 2:
+            return (self.first_order_dm_correction_2p(apply_cvs=apply_cvs)
+                    + self.second_order_dm_correction_2p(apply_cvs=apply_cvs))
+        raise NotImplementedError("Only first and second-order two-particle "
+                                  "density corrections are implemented. "
+                                  f"2p diffdm of level {level} is not available.")
+
+    def density_2p(self, level: int = 2,
+                   apply_cvs: bool = False) -> TwoParticleDensity:
+        """
+        Return the two-particle ground state density in the MO basis
+        with all corrections up to the specified order of perturbation theory.
+        """
+        if level == 0:
+            return self.reference_state.density_2p
+        diffdm = self.diffdm_2p(level, apply_cvs=apply_cvs)
+        return self.reference_state.density_2p + diffdm
 
     @cached_member_function()
-    def df(self, space: str):
+    def dipole_moment(self, level: int = 2, apply_cvs: bool = False
+                      ) -> np.ndarray[tuple[int], np.dtype[np.float64]]:
         """
-        Delta Fock matrix.
+        Return the ground state dipole moment at the specified level of
+        perturbation theory.
         """
+        dm = self.density(level, apply_cvs=apply_cvs)
+        dipole_integrals = self.reference_state.operators.electric_dipole
+        return self.reference_state.nuclear_dipole + np.array([
+            product_trace(comp, dm) for comp in dipole_integrals
+        ])
+
+    @cached_member_function()
+    def ssq(self, level: int = 2, apply_cvs: bool = False) -> float:
+        """
+        Return <S^2> of the ground state.
+        """
+        if self.reference_state.restricted:
+            raise NotImplementedError(
+                "<S^2> is not implemented for restricted HF references."
+            )
+        ssq_1p_op = self.reference_state.operators.ssq_1p
+        ssq_2p_op = self.reference_state.operators.ssq_2p
+        # the trace of the second-order (and higher) correction to the RDM1
+        # is zero -> no influence on top of HF density for ground state
+        ssq_1p = product_trace(ssq_1p_op, self.density(0))
+        ssq_2p = product_trace(
+            ssq_2p_op, self.density_2p(level, apply_cvs=apply_cvs)
+        )
+        return ssq_1p + ssq_2p
+
+    @cached_member_function()
+    def df(self, space: str) -> libadcc.Tensor:
+        """Delta Fock matrix"""
         hf = self.reference_state
         s1, s2 = split_spaces(space)
         fC = hf.fock(s1 + s1).diagonal()
@@ -69,7 +216,7 @@ class GroundState:
         return direct_sum("-i+a->ia", fC, fv)
 
     @cached_member_function()
-    def t2eri(self, space: str, contraction):
+    def t2eri(self, space: str, contraction: str) -> libadcc.Tensor:
         """
         Return the T2 tensor with ERI tensor contraction intermediates.
         These are called pi1 to pi7 in libadc.
@@ -93,97 +240,72 @@ class GroundState:
         contraction_str, eri_block = expressions[key]
         return einsum(contraction_str, self.t2oo, hf.eri(eri_block))
 
-    def density(self, level=2):
+    @cached_property
+    def m_3_plus(self) -> libadcc.Tensor:
         """
-        Return the ground state density in the MO basis with all corrections
-        up to the specified order of perturbation theory.
+        Third order contribution to the ov block of the N+1 part of the
+        dynamic self-energy.
         """
-        if level < 2:
-            return self.reference_state.density
-        elif level == 2:
-            return self.reference_state.density + self.second_order_diffdm_correction
-        else:
-            raise NotImplementedError("Only densities up to 2nd-order"
-                                     " are implemented.")
-
-    @property
-    def density_through_2nd_order(self):
-        """
-        Shortcut for density(2).
-        Return the ground state density in the MO basis with all corrections
-        up to 2nd order.
-        """
-        return density(2)
-
-    def dipole_moment(self, level=2):
-        """
-        Return the ground state dipole moment at the specified level of
-        perturbation theory.
-        """
-        if level < 2:
-            return self.reference_state.dipole_moment
-        elif level == 2:
-            return (self.reference_state.dipole_moment +
-                                             self.second_order_dipole_moment_correction)
-        else:
-            raise NotImplementedError("Only dipole moments up to 2nd-order"
-                                      " are implemented.")
+        return (
+            + 1 * einsum("ijbc,jabc->ia", self.t2oo, self.t2eri(b.ovvv, b.ov))
+            + 0.5 * einsum(
+                "ijbc,jabc->ia", self.td2(b.oovv), self.reference_state.ovvv
+            )
+            - 0.25 * einsum("ijbc,jabc->ia", self.t2oo, self.t2eri(b.ovvv, b.oo))
+        )
 
     @cached_property
-    def second_order_dipole_moment_correction(self):
+    def m_3_minus(self) -> libadcc.Tensor:
         """
-        Return the 2nd-order correction to the ground state dipole moment.
+        Third order contribution to the ov block of the N-1 part of the
+        dynamic self-energy.
         """
-        refstate = self.reference_state
-        dipole_integrals = refstate.operators.electric_dipole
-        correction = -np.array([product_trace(comp, self.second_order_diffdm_correction)
-                                for comp in dipole_integrals])
-        return correction
+        return (
+            + 0.5 * einsum(
+                "jkab,jkib->ia", self.td2(b.oovv), self.reference_state.ooov
+            )
+            - 1 * einsum("jkab,jkib->ia", self.t2oo, self.t2eri(b.ooov, b.ov))
+            - 0.25 * einsum("jkab,jkib->ia", self.t2oo, self.t2eri(b.ooov, b.vv))
+        )
 
-    def diffdm(self, level=2):
-        """
-        Return the n-th order contribution to the ground state difference
-        density in the MO basis.
-        """
-        if level < 2:
-            raise NotImplementedError("The first non-vanishing contribution to "
-                                      "the ground state difference density is "
-                                      "in 2nd order.")
-        elif level == 2:
-            return self.second_order_diffdm_correction
-        else:
-            raise NotImplementedError("Difference density only implemented for "
-                                      "level 2.")
+    @cached_member_function()
+    def sigma_inf_ov(self, level: int) -> libadcc.Tensor:
+        """The ov part of the static self-energy."""
+        hf = self.reference_state
+        dm = self.diffdm(level - 1)
 
-    @cached_property
-    @timed_member_call(timer="timer")
-    def second_order_diffdm_correction(self):
+        return (
+            - einsum("ijka,jk->ia", hf.ooov, dm.oo)
+            + einsum("ijab,jb->ia", hf.oovv, dm.ov)
+            - einsum("ibja,jb->ia", hf.ovov, dm.ov)
+            + einsum("ibac,bc->ia", hf.ovvv, dm.vv)
+        )
+
+    @cached_member_function()
+    def second_order_dm_correction(self, apply_cvs: bool = False
+                                   ) -> OneParticleDensity:
         """
-        Return the 2nd-order difference density in the MO basis.
+        Return the second-order contribution to the ground state
+        difference density in the MO basis.
         """
-        ret = OneParticleDensity(self.mospaces,
-                                 symmetry=OperatorSymmetry.HERMITIAN)
-        # NOTE: the following 3 blocks are equivalent to the cvs_p0 intermediates
-        # defined at the end of this file
+        if apply_cvs and not self.has_core_occupied_space:
+            raise RuntimeError("Cannot apply the CVS approximation to a "
+                               "ground state build on top of a HF reference state "
+                               "without a core space.")
+
+        ret = OneParticleDensity(
+            self.mospaces, symmetry=OperatorSymmetry.HERMITIAN
+        )
         ret.oo = -0.5 * einsum("ikab,jkab->ij", self.t2oo, self.t2oo)
-        #ret.ov = -0.5 * (
-        #    + einsum("ijbc,jabc->ia", self.t2oo, hf.ovvv)
-        #    + einsum("jkib,jkab->ia", hf.ooov, self.t2oo)
-        #) / self.df(b.ov)
-        ret.ov = self.ts2(b.ov)
+        ret.ov = self.ts2(b.ov, apply_cvs=apply_cvs)
         ret.vv = 0.5 * einsum("ijac,ijbc->ab", self.t2oo, self.t2oo)
 
-        if self.has_core_occupied_space:
-            hf = self.reference_state
-            # additional terms to "revert" CVS for ground state density
+        if self.has_core_occupied_space and not apply_cvs:
+            # additional terms since we don't apply the CVS approximation
+            # for the GS density. Within the CVS approximation all of the
+            # following terms vanish for the MP and RE partitionings.
+            # Not sure if this is true for all partitionings!
             ret.oo += -0.5 * einsum("iLab,jLab->ij", self.t2oc, self.t2oc)
-            ret.ov += -0.5 * (
-                + einsum("jMib,jMab->ia", hf.ocov, self.t2oc)
-                + einsum("iLbc,Labc->ia", self.t2oc, hf.cvvv)
-                + einsum("kLib,kLab->ia", hf.ocov, self.t2oc)
-                + einsum("iMLb,LMab->ia", hf.occv, self.t2cc)
-                - einsum("iLMb,LMab->ia", hf.occv, self.t2cc)
-            ) / self.df(b.ov)
             ret.vv += (
                 + 0.5 * einsum("IJac,IJbc->ab", self.t2cc, self.t2cc)
                 + 1.0 * einsum("kJac,kJbc->ab", self.t2oc, self.t2oc)
@@ -197,40 +319,58 @@ class GroundState:
                 + einsum("kIab,kjab->jI", self.t2oc, self.t2oo)
                 + einsum("ILab,jLab->jI", self.t2cc, self.t2oc)
             )
-            ret.cv = -0.5 * (
-                - einsum("jIbc,jabc->Ia", self.t2oc, hf.ovvv)
-                + einsum("jkIb,jkab->Ia", hf.oocv, self.t2oo)
-                + einsum("jMIb,jMab->Ia", hf.occv, self.t2oc)
-                + einsum("ILbc,Labc->Ia", self.t2cc, hf.cvvv)
-                + einsum("kLIb,kLab->Ia", hf.occv, self.t2oc)
-                + einsum("LMIb,LMab->Ia", hf.cccv, self.t2cc)
-            ) / self.df(b.cv)
+            ret.cv = self.ts2(b.cv, apply_cvs=apply_cvs)
         ret.reference_state = self.reference_state
-        return evaluate(ret)
-
-    @cached_property
-    @timed_member_call(timer="timer")
-    def first_order_dm_correction_2p(self) -> TwoParticleDensity:
-        """
-        Return the 1st-order correction to the two-particle difference density
-        in the MO basis.
-        """
-        ret = TwoParticleDensity(self.mospaces,
-                                 symmetry=OperatorSymmetry.HERMITIAN)
-        ret.oovv = -1.0 * self.t2oo
         return ret.evaluate()
 
-    @cached_property
-    @timed_member_call(timer="timer")
-    def second_order_dm_correction_2p(self) -> TwoParticleDensity:
+    def third_order_dm_correction(self, apply_cvs: bool = False
+                                  ) -> OneParticleDensity:
         """
-        Return the 2nd-order correction to the two-particle difference density
+        Return the third-order contribution to the ground state
+        difference density in the MO basis.
+        """
+        raise NotImplementedError(
+            "Third-order contribution to the ground state difference "
+            "density in the MO basis not implemented on "
+            f"{self.__class__.__name__} class."
+        )
+
+    @cached_member_function()
+    def first_order_dm_correction_2p(self, apply_cvs: bool = False
+                                     ) -> TwoParticleDensity:
+        """
+        Return the two-particle first-order difference density correction
         in the MO basis.
         """
+        if self.has_core_occupied_space:
+            raise NotImplementedError("First-order 2-particle DM correction not "
+                                      "implemented for a ground state with "
+                                      "core orbitals.")
+        assert not apply_cvs  # TODO: once implemented for core orbitals
+        ret = TwoParticleDensity(
+            self.mospaces, symmetry=OperatorSymmetry.HERMITIAN
+        )
+        ret.oovv = -1.0 * self.t2oo
+        ret.reference_state = self.reference_state
+        return ret.evaluate()
+
+    @cached_member_function()
+    def second_order_dm_correction_2p(self, apply_cvs: bool = False
+                                      ) -> TwoParticleDensity:
+        """
+        Return the two-particle second-order difference density correction
+        in the MO basis.
+        """
+        if self.has_core_occupied_space:
+            raise NotImplementedError("Second-order 2-particle DM correction not "
+                                      "implemented for a ground state with "
+                                      "core orbitals.")
+        assert not apply_cvs  # TODO: once implemented for core orbitals
         hf: ReferenceState = self.reference_state
-        ret = TwoParticleDensity(self.mospaces,
-                                 symmetry=OperatorSymmetry.HERMITIAN)
-        p0: OneParticleDensity = self.second_order_diffdm_correction
+        ret = TwoParticleDensity(
+            self.mospaces, symmetry=OperatorSymmetry.HERMITIAN
+        )
+        p0: OneParticleDensity = self.diffdm(2)
 
         # constuct Kronecker Delta
         d_oo = zeros_like(hf.foo)
@@ -254,50 +394,11 @@ class GroundState:
         ret.vvvv = (
             + 0.5 * einsum("ijab,ijcd->abcd", self.t2oo, self.t2oo)
         )
-        return evaluate(ret)
+        ret.reference_state = self.reference_state
+        return ret.evaluate()
 
-    def diffdm_2p(self, level=2) -> TwoParticleDensity:
-        """
-        Return the two-particle difference density in the MO basis with all
-        corrections up to the specified order of perturbation theory.
-        """
-        if level == 1:
-            return self.first_order_dm_correction_2p
-        elif level == 2:
-            return (self.first_order_dm_correction_2p
-                    + self.second_order_dm_correction_2p)
-        else:
-            raise NotImplementedError("Only first and second-order two-particle "
-                                      "density corrections are implemented.")
-
-    def density_2p(self, level=2) -> TwoParticleDensity:
-        """
-        Return the two-particle density in the MO basis with all corrections
-        up to the specified order of perturbation theory.
-        """
-        if level == 0:
-            return self.reference_state.density_2p
-        diffdm = self.diffdm_2p(level)
-        return self.reference_state.density_2p + diffdm
-
-    @cached_member_function()
-    def ssq(self, level=2):
-        """
-        Return <S^2> of the ground state.
-        """
-        if self.reference_state.restricted:
-            raise NotImplementedError(
-                "<S^2> is not implemented for restricted HF references."
-            )
-        ssq_1p_op = self.reference_state.operators.ssq_1p
-        ssq_2p_op = self.reference_state.operators.ssq_2p
-        # the trace of the second-order (and higher) correction to the RDM1
-        # is zero -> no influence on top of HF density for ground state
-        ssq_1p = product_trace(ssq_1p_op, self.density(0))
-        ssq_2p = product_trace(ssq_2p_op, self.density_2p(level))
-        return (ssq_1p + ssq_2p)
-
-    def _to_qcvars(self, properties=False, recurse=False, maxlevel=2, method="MP"):
+    def _to_qcvars(self, gs_type: str, properties: bool = False,
+                   recurse: bool = False, maxlevel: int = 2) -> dict:
         """
         Return a dictionary with property keys compatible to a Psi4 wavefunction
         or a QCEngine Atomicresults object.
@@ -306,8 +407,8 @@ class GroundState:
         for level in range(2, maxlevel + 1):
             try:
                 mpcorr = self.energy_correction(level)
-                qcvars[f"{method}{level} CORRELATION ENERGY"] = mpcorr
-                qcvars[f"{method}{level} TOTAL ENERGY"] = self.energy(level)
+                qcvars[f"{gs_type}{level} CORRELATION ENERGY"] = mpcorr
+                qcvars[f"{gs_type}{level} TOTAL ENERGY"] = self.energy(level)
             except NotImplementedError:
                 pass
             except ValueError:
@@ -316,65 +417,10 @@ class GroundState:
         if properties:
             for level in range(2, maxlevel + 1):
                 try:
-                    qcvars[f"{method}{level} DIPOLE"] = self.dipole_moment(level)
+                    qcvars[f"{gs_type}{level} DIPOLE"] = self.dipole_moment(level)
                 except NotImplementedError:
                     pass
 
         if recurse:
             qcvars.update(self.reference_state.to_qcvars(properties, recurse))
         return qcvars
-
-# The following functions are defined to avoid TypeChecking issues.
-# The quantities they are intended to return depend on the specific
-# definition of the partitioning scheme H = H_0 + H_1 
-# As such, they are only calculated by child classes LazyMp and LazyRe.
-
-    @cached_member_function()
-    def t2(self, space: str):
-        """
-        T2 amplitudes (i.e., 1st-order doubles amplitudes).
-        """
-        raise NotImplementedError("1st-order doubles amplitudes "
-                                  f"not defined for {self.__class__}")
-
-    @cached_member_function()
-    def ts2(self, space: str):
-        """
-        Return the 2nd-order singles amplitudes.
-        """
-        raise NotImplementedError("2nd-order singles amplitudes "
-                                  f"not defined for {self.__class__}")
-
-    @cached_member_function()
-    def td2(self, space: str):
-        """
-        Return the 2nd-order doubles amplitudes.
-        """
-        raise NotImplementedError("2nd-order doubles amplitudes "
-                                  f"not defined for {self.__class__}")
-
-    @cached_member_function()
-    def tt2(self, space: str):
-        """
-        Return the 2nd-order triples amplitudes for the given space
-        (e.g. o1o1o1v1v1v1).
-        """
-        raise NotImplementedError("2nd-order triples amplitudes "
-                                  f"not defined for {self.__class__}")
-
-    @cached_member_function()
-    def energy_correction(self, level=2):
-        """
-        Obtain the energy correction at a particular level of perturbation
-        theory.
-        """
-        raise NotImplementedError("Energy corrections "
-                                  f"not defined for {self.__class__}")
-
-    def energy(self, level=2):
-        """
-        Obtain the total energy (SCF energy plus all corrections)
-        consistent through a particular level of perturbation theory.
-        """
-        raise NotImplementedError("Total energy "
-                                  f"not defined for {self.__class__}")
