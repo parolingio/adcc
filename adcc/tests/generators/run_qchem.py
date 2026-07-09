@@ -357,7 +357,7 @@ def generate_qchem_input_file(infile: str | Path, adc_method: AdcMethod, basis: 
                               n_frozen_virtual: int | None = None,
                               max_ss: int | None = None,
                               gs_density_order: int | str | None = None,
-                              isr_order: MethodLevel | None = None,
+                              isr_order: int | str | None = None,
                               run_qchem_scf: bool = False,
                               davidson_thresh: int = 14) -> None:
     """
@@ -506,9 +506,9 @@ _method_dict: dict[str, str] = {
     "cvs-adc3": "cvs-adc(3)"
 }
 
-_isr_order_dict: dict[MethodLevel, str] = {
-    MethodLevel.THREE: "3",
-    MethodLevel.THREE_D: "THREE_D",
+_isr_order_dict: dict[int | str, str] = {
+    3: "3",
+    "3d": "THREE_D"
 }
 
 _gs_density_order_dict: dict[str, str] = {
