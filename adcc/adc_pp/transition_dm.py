@@ -23,7 +23,7 @@
 from math import sqrt
 
 from adcc import block as b
-from adcc.LazyMp import LazyMp
+from adcc.GroundState import GroundState
 from adcc.AdcMethod import IsrMethod
 from adcc.functions import einsum
 from adcc.Intermediates import Intermediates
@@ -34,33 +34,33 @@ from adcc.NParticleOperator import OperatorSymmetry
 from .util import check_doubles_amplitudes, check_singles_amplitudes
 
 
-def tdm_isr0(mp, amplitude, intermediates):
+def tdm_isr0(gs, amplitude, intermediates):
     # C is either c(ore) or o(ccupied)
-    C = b.c if mp.has_core_occupied_space else b.o
+    C = b.c if gs.has_core_occupied_space else b.o
     check_singles_amplitudes([C, b.v], amplitude)
     u1 = amplitude.ph
 
     # Transition density matrix for (CVS-)ISR(0)
-    dm = OneParticleDensity(mp, symmetry=OperatorSymmetry.NOSYMMETRY)
+    dm = OneParticleDensity(gs, symmetry=OperatorSymmetry.NOSYMMETRY)
     dm[b.v + C] = u1.transpose()
     return dm
 
 
-def tdm_isr1(mp, amplitude, intermediates):
-    dm = tdm_isr0(mp, amplitude, intermediates)  # Get ISR(0) result
+def tdm_isr1(gs, amplitude, intermediates):
+    dm = tdm_isr0(gs, amplitude, intermediates)  # Get ISR(0) result
     # isr1_dp0_ov
-    dm.ov = -einsum("ijab,jb->ia", mp.t2(b.oovv), amplitude.ph)
+    dm.ov = -einsum("ijab,jb->ia", gs.t2(b.oovv), amplitude.ph)
     return dm
 
 
-def tdm_cvs_isr2(mp, amplitude, intermediates):
+def tdm_cvs_isr2(gs, amplitude, intermediates):
     # Get CVS-ISR(1) result (same as CVS-ISR(0))
-    dm = tdm_isr0(mp, amplitude, intermediates)
+    dm = tdm_isr0(gs, amplitude, intermediates)
     check_doubles_amplitudes([b.o, b.c, b.v, b.v], amplitude)
     u1, u2 = amplitude.ph, amplitude.pphh
 
-    t2 = mp.t2(b.oovv)
-    p0 = mp.second_order_dm_correction(apply_cvs=True)
+    t2 = gs.t2(b.oovv)
+    p0 = gs.second_order_dm_correction(apply_cvs=True)
 
     # Compute CVS-ISR(2) tdm
     dm.oc = (  # cvs_isr2_dp0_oc
@@ -73,14 +73,14 @@ def tdm_cvs_isr2(mp, amplitude, intermediates):
     return dm
 
 
-def tdm_isr2(mp, amplitude, intermediates):
-    dm = tdm_isr1(mp, amplitude, intermediates)  # Get ISR(1) result
+def tdm_isr2(gs, amplitude, intermediates):
+    dm = tdm_isr1(gs, amplitude, intermediates)  # Get ISR(1) result
     check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude)
     u1, u2 = amplitude.ph, amplitude.pphh
 
-    t2 = mp.t2(b.oovv)
-    td2 = mp.td2(b.oovv)
-    p0 = mp.mp2_diffdm
+    t2 = gs.t2(b.oovv)
+    td2 = gs.td2(b.oovv)
+    p0 = gs.second_order_dm_correction()
 
     # Compute ISR(2) tdm
     dm.oo = (  # isr2_dp0_oo
@@ -100,6 +100,34 @@ def tdm_isr2(mp, amplitude, intermediates):
     return dm
 
 
+def tdm_re_isr2(re, amplitude, intermediates):
+    # NOTE: equations are the same as for MP-ADC. Just removed terms where the
+    # td2 tensor occured, because the second order RE doubles amplitudes vanish
+    # for block diagonal fock matrices.
+    dm = tdm_isr1(re, amplitude, intermediates)  # Get ADC(1) result
+    check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude)
+    u1, u2 = amplitude.ph, amplitude.pphh
+
+    t2 = re.t2(b.oovv)
+    p0 = re.second_order_dm_correction()
+
+    # Compute ISR(2) tdm
+    dm.oo = (  # isr2_dp0_oo
+        - einsum("ia,ja->ij", p0.ov, u1)
+        - einsum("ikab,jkab->ji", u2, t2)
+    )
+    dm.vv = (  # isr2_dp0_vv
+        + einsum("ia,ib->ab", u1, p0.ov)
+        + einsum("ijac,ijbc->ab", u2, t2)
+    )
+    dm.vo += 0.5 * (  # isr2_dp0_vo
+        + einsum("ijab,jkbc,kc->ai", t2, t2, u1)
+        - einsum("ab,ib->ai", p0.vv, u1)
+        + einsum("ja,ij->ai", u1, p0.oo)
+    )
+    return dm
+
+
 DISPATCH = {
     "isr0": tdm_isr0,
     "isr1s": tdm_isr1,  # Identical to ISR(1)
@@ -110,6 +138,12 @@ DISPATCH = {
     "cvs-isr1": tdm_isr0,  # No extra contribs for CVS-ISR(1)
     "cvs-isr2d": tdm_cvs_isr2,  # Identical to CVS-ISR(2)
     "cvs-isr2": tdm_cvs_isr2,
+    # RE-ADC and normal ADC share the same properties
+    "re-isr0": tdm_isr0,
+    "re-isr1s": tdm_isr1,  # Identical to ISR(1)
+    "re-isr1": tdm_isr1,
+    "re-isr2d": tdm_re_isr2,  # Identical to ISR(2)
+    "re-isr2": tdm_re_isr2,
 }
 
 
@@ -122,7 +156,7 @@ def transition_dm(method, ground_state, amplitude, intermediates=None):
     ----------
     method : str, IsrMethod
         The method to use for the computation (e.g. "isr2")
-    ground_state : LazyMp
+    ground_state : GroundState
         The ground state upon which the excitation was based
     amplitude : AmplitudeVector
         The amplitude vector
@@ -131,8 +165,8 @@ def transition_dm(method, ground_state, amplitude, intermediates=None):
     """
     if not isinstance(method, IsrMethod):
         method = IsrMethod(method)
-    if not isinstance(ground_state, LazyMp):
-        raise TypeError("ground_state should be a LazyMp object.")
+    if not isinstance(ground_state, GroundState):
+        raise TypeError("ground_state should be a GroundState object.")
     if not isinstance(amplitude, AmplitudeVector):
         raise TypeError("amplitude should be an AmplitudeVector object.")
     if intermediates is None:

@@ -21,7 +21,7 @@
 ##
 ## ---------------------------------------------------------------------
 from adcc import block as b
-from adcc.LazyMp import LazyMp
+from adcc.GroundState import GroundState
 from adcc.AdcMethod import IsrMethod
 from adcc.functions import einsum
 from adcc.Intermediates import Intermediates
@@ -32,19 +32,19 @@ from adcc.NParticleOperator import OperatorSymmetry
 from .util import check_doubles_amplitudes, check_singles_amplitudes
 
 
-def s2s_tdm_isr0(mp, amplitude_l, amplitude_r, intermediates):
+def s2s_tdm_isr0(gs, amplitude_l, amplitude_r, intermediates):
     check_singles_amplitudes([b.o, b.v], amplitude_l, amplitude_r)
     ul1 = amplitude_l.ph
     ur1 = amplitude_r.ph
 
-    dm = OneParticleDensity(mp, symmetry=OperatorSymmetry.NOSYMMETRY)
+    dm = OneParticleDensity(gs, symmetry=OperatorSymmetry.NOSYMMETRY)
     dm.oo = -einsum('ja,ia->ij', ul1, ur1)
     dm.vv = einsum('ia,ib->ab', ul1, ur1)
     return dm
 
 
-def s2s_tdm_isr1(mp, amplitude_l, amplitude_r, intermediates):
-    dm = s2s_tdm_isr0(mp, amplitude_l, amplitude_r, intermediates)
+def s2s_tdm_isr1(gs, amplitude_l, amplitude_r, intermediates):
+    dm = s2s_tdm_isr0(gs, amplitude_l, amplitude_r, intermediates)
 
     try:
         check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude_l, amplitude_r)
@@ -58,15 +58,15 @@ def s2s_tdm_isr1(mp, amplitude_l, amplitude_r, intermediates):
     return dm
 
 
-def s2s_tdm_isr2(mp, amplitude_l, amplitude_r, intermediates):
+def s2s_tdm_isr2(gs, amplitude_l, amplitude_r, intermediates):
     check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude_l, amplitude_r)
-    dm = s2s_tdm_isr1(mp, amplitude_l, amplitude_r, intermediates)
+    dm = s2s_tdm_isr1(gs, amplitude_l, amplitude_r, intermediates)
 
     ul1, ul2 = amplitude_l.ph, amplitude_l.pphh
     ur1, ur2 = amplitude_r.ph, amplitude_r.pphh
 
-    t2 = mp.t2(b.oovv)
-    p0 = mp.mp2_diffdm
+    t2 = gs.t2(b.oovv)
+    p0 = gs.second_order_dm_correction()
     p1_oo = dm.oo.evaluate()  # ADC(1) tdm
     p1_vv = dm.vv.evaluate()  # ADC(1) tdm
 
@@ -123,6 +123,12 @@ DISPATCH = {
     "isr1": s2s_tdm_isr1,
     "isr2d": s2s_tdm_isr2,  # Identical to ISR(2)
     "isr2": s2s_tdm_isr2,
+    # RE-ADC and normal ADC share the same properties
+    "re-isr0": s2s_tdm_isr0,
+    "re-isr1s": s2s_tdm_isr0,  # Identical to ISR(0)
+    "re-isr1": s2s_tdm_isr1,
+    "re-isr2d": s2s_tdm_isr2,  # Identical to ISR(2)
+    "re-isr2": s2s_tdm_isr2,
 }
 
 
@@ -136,7 +142,7 @@ def state2state_transition_dm(method, ground_state, amplitude_from,
     ----------
     method : str, IsrMethod
         The method to use for the computation (e.g. "isr2")
-    ground_state : LazyMp
+    ground_state : GroundState
         The ground state upon which the excitation was based
     amplitude_from : AmplitudeVector
         The amplitude vector of the state to start from
@@ -147,8 +153,8 @@ def state2state_transition_dm(method, ground_state, amplitude_from,
     """
     if not isinstance(method, IsrMethod):
         method = IsrMethod(method)
-    if not isinstance(ground_state, LazyMp):
-        raise TypeError("ground_state should be a LazyMp object.")
+    if not isinstance(ground_state, GroundState):
+        raise TypeError("ground_state should be a GroundState object.")
     if not isinstance(amplitude_from, AmplitudeVector):
         raise TypeError("amplitude_from should be an AmplitudeVector object.")
     if not isinstance(amplitude_to, AmplitudeVector):

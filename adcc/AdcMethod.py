@@ -85,6 +85,8 @@ class AdcType(Enum):
 
 class GroundStateType(Enum):
     MP = "mp"
+    RE = "re"
+    REMP = "remp"
 
     def to_str(self) -> str:
         return self.value
@@ -159,7 +161,7 @@ class Method:
                 f"have to end with e.g. 'pp-adc2'."
             )
         # validate prefixes
-        valid_prefixes: tuple[str, ...] = ("cvs", "mp")
+        valid_prefixes: tuple[str, ...] = ("cvs", "mp", "re", "remp")
         if any(pref not in valid_prefixes for pref in split):
             raise ValueError(f"Invalid method prefix in {split}. Valid prefixes "
                              f"are {valid_prefixes}.")
@@ -188,27 +190,6 @@ class Method:
         # ensure that the level is valid for the given method
         # this also depends on the adc type, gs_type and possibly other prefixes
         self._validate_level(self.level)
-
-        assert self._base_method == split[-1]
-
-        # validate prefix
-        split = split[:-1]
-        valid_prefixes: tuple[str, ...] = ("cvs",)
-        if len(split) > len(valid_prefixes):
-            raise ValueError("Invalid number of method prefixes provided "
-                             f"in {split}.")
-        if any(pref not in valid_prefixes for pref in split):
-            raise ValueError(f"Invalid method prefix in {split}.")
-
-        self.is_core_valence_separated: bool = "cvs" in split
-        # NOTE: added this to make the testdata generation ready for IP/EA
-        self.adc_type: str = "pp"
-
-        # ground state
-        if "re" in split:
-            self.gs_type = "re"
-        else:
-            self.gs_type = "mp"
 
     def _validate_level(self, level: MethodLevel) -> None:
         key = LevelKey(
@@ -315,6 +296,22 @@ class AdcMethod(Method):
         ): LevelSpec(
             max_level=3,
             special_levels=(MethodLevel.TWO_X,)
+        ),
+        LevelKey(
+            adc_type=AdcType.PP,
+            gs_type=GroundStateType.RE,
+            cvs=False
+        ): LevelSpec(
+            max_level=3,
+            special_levels=(MethodLevel.TWO_X,)
+        ),
+        LevelKey(
+            adc_type=AdcType.PP,
+            gs_type=GroundStateType.REMP,
+            cvs=False
+        ): LevelSpec(
+            max_level=3, ### TO DO
+            special_levels=(MethodLevel.TWO_X,) ### TO DO
         )
     }
 
@@ -334,6 +331,14 @@ class IsrMethod(Method):
             adc_type=AdcType.PP,
             gs_type=GroundStateType.MP,
             cvs=True
+        ): LevelSpec(
+            max_level=2,
+            special_levels=(MethodLevel.ONE_S, MethodLevel.TWO_D)
+        ),
+        LevelKey(
+            adc_type=AdcType.PP,
+            gs_type=GroundStateType.RE,
+            cvs=False
         ): LevelSpec(
             max_level=2,
             special_levels=(MethodLevel.ONE_S, MethodLevel.TWO_D)

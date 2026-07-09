@@ -245,10 +245,12 @@ class LazyMp(GroundState):
     def energy_correction(self, level: int = 2) -> float:
         """Obtain the MP energy correction at a particular level"""
         assert level >= 0
-        if level < 2:
+        if level == 0:
             return 0.0
         hf = self.reference_state
         is_cvs = self.has_core_occupied_space
+        if level == 1 and not is_cvs:
+            return -0.5 * np.einsum("ijij->", hf.oooo.to_ndarray())
         if level == 2 and not is_cvs:
             terms = [(1.0, hf.oovv, self.t2oo)]
         elif level == 2 and is_cvs:
@@ -276,8 +278,13 @@ class LazyMp(GroundState):
         assert level >= 0
         if level == 0:
             # Sum of orbital energies ...
-            return np.einsum(
-                "i->", self.reference_state.foo.diagonal().to_ndarray()
+            # Be careful as nuclear repulsion energy Vnn is missing!
+            #return np.einsum(
+            #    "i->", self.reference_state.foo.diagonal().to_ndarray()
+            #)
+            # Starting from the 'energy_scf' attribute, Vnn is included
+            return (self.reference_state.energy_scf
+                    + 0.5 * np.einsum("ijij->", hf.oooo.to_ndarray())
             )
 
         # Accumulator for all energy terms

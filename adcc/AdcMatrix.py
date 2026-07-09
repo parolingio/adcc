@@ -29,7 +29,7 @@ from .GroundState import GroundState
 from .LazyMp import LazyMp
 from .adc_pp import matrix as ppmatrix
 from .timings import Timer, timed_member_call
-from .AdcMethod import AdcMethod, Method, AdcType
+from .AdcMethod import AdcMethod, Method, AdcType, GroundStateType
 from .functions import ones_like
 from .Intermediates import Intermediates
 from .AmplitudeVector import AmplitudeVector
@@ -203,8 +203,9 @@ class AdcMatrixlike:
 
 class AdcMatrix(AdcMatrixlike):
 
-    def __init__(self, method, hf_or_mp, block_orders=None, intermediates=None,
-                 diagonal_precomputed=None):
+    def __init__(self, method, hf_or_mp, block_orders=None,
+                 intermediates=None, diagonal_precomputed=None,
+                 gs_conv_tol=None, gs_max_iter=None):
         """
         Initialise an ADC matrix.
 
@@ -213,7 +214,7 @@ class AdcMatrix(AdcMatrixlike):
         method : str or AdcMethod
             Method to use.
         hf_or_mp : adcc.ReferenceState or adcc.GroundState
-            HF reference or PT ground state (MP or RE)
+            HF reference or PT ground state (MP, RE, REMP)
         block_orders : optional
             The order of perturbation theory to employ for each matrix block.
             If not set, defaults according to the selected ADC method are chosen.
@@ -221,19 +222,31 @@ class AdcMatrix(AdcMatrixlike):
             Allows to pass intermediates to re-use to this class.
         diagonal_precomputed: adcc.AmplitudeVector
             Allows to pass a pre-computed diagonal, for internal use only.
+        gs_conv_tol : float, optional
+            Convergence tolerance for the RE and REMP ground state amplitudes
+            (default: SCF tolerance).
+        gs_max_iter : int, optional
+            Maximum number of iterations for the RE ground state amplitudes
+            (default: 100).
         """
         # circular import -> can't import on top
-        from .LazyRe import LazyRe
+        ##############   from .LazyRe import LazyRe
+        ##############   from .LazyRemp import LazyRemp
 
         if not isinstance(method, AdcMethod):
             method = AdcMethod(method)
 
         if isinstance(hf_or_mp, (libadcc.ReferenceState,
                                  libadcc.HartreeFockSolution_i)):
-            if method.gs_type == "mp":
+            if method.gs_type.to_str() == "mp":
                 hf_or_mp = LazyMp(hf_or_mp)
-            elif method.gs_type == "re":
+            elif method.gs_type.to_str() == "re":
+                from .LazyRe import LazyRe
                 hf_or_mp = LazyRe(hf_or_mp, conv_tol=gs_conv_tol,
+                                  max_iter=gs_max_iter)
+            elif method.gs_type.to_str() == "remp":
+                from .LazyRemp import LazyRemp
+                hf_or_mp = LazyRemp(hf_or_mp, conv_tol=gs_conv_tol,
                                   max_iter=gs_max_iter)
             else:
                 raise ValueError(f"Unknown ground state type {method.gs_type}.")
@@ -276,11 +289,11 @@ class AdcMatrix(AdcMatrixlike):
 
         # Build the blocks and diagonals
         with self.timer.record("build"):
-            variant = None
+            variant = []
             if self.is_core_valence_separated:
-                variant = "cvs"
-            if self.gs_type != "mp":
-                variant.append(self.gs_type)
+                variant.append("cvs")
+            if self.gs_type is not GroundStateType.MP:
+                variant.append(self.gs_type.to_str())
             blocks = {
                 block: ppmatrix.block(self.ground_state, block.split("_"),
                                       order=order, intermediates=self.intermediates,

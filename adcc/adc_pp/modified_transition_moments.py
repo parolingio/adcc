@@ -23,36 +23,36 @@
 from math import sqrt
 
 from adcc import block as b
-from adcc.LazyMp import LazyMp
+from adcc.GroundState import GroundState
 from adcc.AdcMethod import IsrMethod
 from adcc.functions import einsum, evaluate
 from adcc.Intermediates import Intermediates
 from adcc.AmplitudeVector import AmplitudeVector
 
 
-def mtm_isr0(mp, op, intermediates):
+def mtm_isr0(gs, op, intermediates):
     f1 = op.vo.transpose()
     return AmplitudeVector(ph=f1)
 
 
-def mtm_isr1(mp, op, intermediates):
-    ampl = mtm_isr0(mp, op, intermediates)
-    f1 = - 1.0 * einsum("ijab,jb->ia", mp.t2(b.oovv), op.ov)
+def mtm_isr1(gs, op, intermediates):
+    ampl = mtm_isr0(gs, op, intermediates)
+    f1 = - 1.0 * einsum("ijab,jb->ia", gs.t2(b.oovv), op.ov)
     return ampl + AmplitudeVector(ph=f1)
 
 
-def mtm_isr2(mp, op, intermediates):
-    t2 = mp.t2(b.oovv)
-    p0 = mp.mp2_diffdm
+def mtm_isr2(gs, op, intermediates):
+    t2 = gs.t2(b.oovv)
+    p0 = gs.second_order_dm_correction()
 
-    ampl = mtm_isr1(mp, op, intermediates)
+    ampl = mtm_isr1(gs, op, intermediates)
     f1 = (
         + 0.5 * einsum("ijab,jkbc,ck->ia", t2, t2, op.vo)
         + 0.5 * einsum("ij,aj->ia", p0.oo, op.vo)
         - 0.5 * einsum("bi,ab->ia", op.vo, p0.vv)
         + 1.0 * einsum("ib,ab->ia", p0.ov, op.vv)
         - 1.0 * einsum("ji,ja->ia", op.oo, p0.ov)
-        - 1.0 * einsum("ijab,jb->ia", mp.td2(b.oovv), op.ov)
+        - 1.0 * einsum("ijab,jb->ia", gs.td2(b.oovv), op.ov)
     )
     f2 = (
         + 1.0 * einsum("ijac,bc->ijab", t2, op.vv).antisymmetrise(2, 3)
@@ -61,20 +61,45 @@ def mtm_isr2(mp, op, intermediates):
     return ampl + AmplitudeVector(ph=f1, pphh=f2)
 
 
-def mtm_cvs_isr0(mp, op, intermediates):
+def mtm_cvs_isr0(gs, op, intermediates):
     f1 = op.vc.transpose()
     return AmplitudeVector(ph=f1)
 
 
-def mtm_cvs_isr2(mp, op, intermediates):
+def mtm_cvs_isr2(gs, op, intermediates):
 
-    ampl = mtm_cvs_isr0(mp, op, intermediates)
-    cvs_p0 = mp.second_order_dm_correction(apply_cvs=True)
+    ampl = mtm_cvs_isr0(gs, op, intermediates)
+    cvs_p0 = gs.second_order_dm_correction(apply_cvs=True)
     f1 = (
         - 0.5 * einsum("bI,ab->Ia", op.vc, cvs_p0.vv)
         - 1.0 * einsum("jI,ja->Ia", op.oc, cvs_p0.ov)
     )
-    f2 = (1 / sqrt(2)) * einsum("kI,kjab->jIab", op.oc, mp.t2(b.oovv))
+    f2 = (1 / sqrt(2)) * einsum("kI,kjab->jIab", op.oc,
+                                gs.t2(b.oovv))
+    return ampl + AmplitudeVector(ph=f1, pphh=f2)
+
+
+def mtm_re_isr2(re, op, intermediates):
+    # NOTE: equations are the same as for MP-ISR. Just removed terms where the
+    # td2 tensor occured, because the second order RE doubles amplitudes vanish
+    # for block diagonal fock matrices.
+    t2 = re.t2(b.oovv)
+    p0 = re.second_order_dm_correction()
+
+    op_vo = op.ov.transpose() if op.is_symmetric else op.vo
+
+    ampl = mtm_adc1(re, op, intermediates)
+    f1 = (
+        + 0.5 * einsum("ijab,jkbc,ck->ia", t2, t2, op_vo)
+        + 0.5 * einsum("ij,aj->ia", p0.oo, op_vo)
+        - 0.5 * einsum("bi,ab->ia", op_vo, p0.vv)
+        + 1.0 * einsum("ib,ab->ia", p0.ov, op.vv)
+        - 1.0 * einsum("ji,ja->ia", op.oo, p0.ov)
+    )
+    f2 = (
+        + 1.0 * einsum("ijac,bc->ijab", t2, op.vv).antisymmetrise(2, 3)
+        + 1.0 * einsum("ki,jkab->ijab", op.oo, t2).antisymmetrise(0, 1)
+    )
     return ampl + AmplitudeVector(ph=f1, pphh=f2)
 
 
@@ -89,6 +114,11 @@ DISPATCH = {
     "cvs-isr1": mtm_cvs_isr0,  # Identical to CVS-ISR(0)
     "cvs-isr2d": mtm_cvs_isr2,  # Identical to CVS-ISR(2)
     "cvs-isr2": mtm_cvs_isr2,
+    "re-adc0": mtm_isr0,
+    "re-isr1s": mtm_isr1,  # Identical to ISR(1)
+    "re-adc1": mtm_isr1,
+    "re-isr2d": mtm_re_isr2,  # Identical to ISR(2)
+    "re-adc2": mtm_re_isr2,
 }
 
 
@@ -101,7 +131,7 @@ def modified_transition_moments(method, ground_state, operator=None,
     ----------
     method: adcc.IsrMethod
         Provide a method at which to compute the MTMs
-    ground_state : adcc.LazyMp
+    ground_state : adcc.GroundState
         The MP ground state
     operator : adcc.OneParticleOperator or list, optional
         Only required if different operators than the standard
@@ -115,8 +145,8 @@ def modified_transition_moments(method, ground_state, operator=None,
     """
     if not isinstance(method, IsrMethod):
         method = IsrMethod(method)
-    if not isinstance(ground_state, LazyMp):
-        raise TypeError("ground_state should be a LazyMp object.")
+    if not isinstance(ground_state, GroundState):
+        raise TypeError("ground_state should be a GroundState object.")
     if intermediates is None:
         intermediates = Intermediates(ground_state)
 

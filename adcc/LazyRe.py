@@ -24,8 +24,13 @@ from .AdcMatrix import AdcMatrixlike
 from .AmplitudeVector import AmplitudeVector
 from .functions import direct_sum, einsum
 from .GroundState import GroundState
+from .ReferenceState import ReferenceState
 from .misc import cached_member_function
 from . import block as b
+
+import libadcc
+
+from typing import Union
 
 
 class LazyRe(GroundState):
@@ -44,7 +49,8 @@ class LazyRe(GroundState):
         RE ground state amplitudes (default: 100).
     """
 
-    def __init__(self, hf, conv_tol=None, max_iter=None):
+    def __init__(self, hf: Union[ReferenceState, libadcc.HartreeFockSolution_i],
+                 conv_tol: float = None, max_iter: int = None):
         if conv_tol is None:
             conv_tol = hf.conv_tol
         self.conv_tol = conv_tol
@@ -54,17 +60,17 @@ class LazyRe(GroundState):
         super().__init__(hf)
 
     @cached_member_function()
-    def ts1(self, space):
+    def ts1(self, space: str):
         """
         First order RE ground state singles amplitudes.
         Zero for a block diagonal Fock matrix.
         """
         raise NotImplementedError("The first order RE singles amplitudes vanish "
-                                  "for a block diagonal fock matrix. Probably you "
+                                  "for a block diagonal Fock matrix. Probably you "
                                   "don't need this tensor.")
 
     @cached_member_function()
-    def t2(self, space):
+    def td1(self, space: str) -> libadcc.Tensor:
         """
         1st-order RE ground state doubles amplitudes.
         """
@@ -96,7 +102,7 @@ class LazyRe(GroundState):
         return t2
 
     @cached_member_function()
-    def ts2(self, space):
+    def ts2(self, space: str, apply_cvs: bool = False) -> libadcc.Tensor:
         """
         2nd-order RE ground state singles amplitudes.
         """
@@ -104,6 +110,8 @@ class LazyRe(GroundState):
         from .solver.preconditioner import JacobiPreconditioner
         from .LazyMp import LazyMp
 
+        if apply_cvs:
+            raise NotImplementedError("CVS-RE not implemented.")
         if space != b.ov:
             raise NotImplementedError("2nd-order singles not implemented for "
                                       f"space {space}.")
@@ -131,7 +139,7 @@ class LazyRe(GroundState):
         return t1
 
     @cached_member_function()
-    def td2(self, space):
+    def td2(self, space: str):
         """
         Second order RE ground state doubles amplitudes.
         Zero as long as the first order singles are 0
@@ -142,41 +150,46 @@ class LazyRe(GroundState):
                                   "don't need this tensor.")
 
     @cached_member_function()
-    def energy_correction(self, level=2):
+    def energy_correction(self, level: int = 2) -> float:
         """
         Obtain the RE energy correction at a particular level.
         """
-        hf = self.reference_state
+        assert level >= 0
         if level < 2:
             return 0.0
-        elif level == 2:
+        hf = self.reference_state
+        if level == 2:
             return -0.25 * hf.oovv.dot(self.t2oo)
         elif level == 3:
-            # for a block diagonal fock matrix the third order energy correction
+            # For a block diagonal Fock matrix the third order energy correction
             # vanishes, since the td2 tensor is zero
             return 0.0
         else:
             raise NotImplementedError(f"RE({level}) energy correction "
                                       "not implemented.")
 
-    def energy(self, level=2):
+    def energy(self, level: int = 2) -> float:
         """
         Obtain the total RE energy (SCF energy plus all corrections)
         consistent through a particular level of perturbation theory.
         """
-        # 0th order: SCF; 1st order: zero
+        assert level >= 0
+        # 0th order: SCF; 1st-order correction = 0
         energies = [self.reference_state.energy_scf]
         for il in range(2, level + 1):
             energies.append(self.energy_correction(il))
         return sum(energies)
 
-    def to_qcvars(self, properties=False, recurse=False, maxlevel=2):
+    def to_qcvars(self, properties: bool = False,
+                  recurse: bool = False, maxlevel: int = 2) -> dict:
         """
         Return a dictionary with property keys compatible to a Psi4 wavefunction
         or a QCEngine Atomicresults object.
         """
-        return self._to_qcvars(properties=properties, recurse=recurse,
-                               maxlevel=maxlevel, method="RE")
+        return self._to_qcvars(
+                gs_type="RE", properties=properties, recurse=recurse,
+                maxlevel=maxlevel
+        )
 
     @property
     def re2_diffdm(self):
@@ -198,14 +211,6 @@ class LazyRe(GroundState):
         Return the RE2 ground state dipole moment.
         """
         return self.dipole_moment(2)
-
-    @property
-    def re2_second_order_dipole_moment(self):
-        """
-        Return the 2nd-order correction
-        to the RE2 ground state dipole moment.
-        """
-        return self.second_order_dipole_moment()
 
 
 class ReAmplitude(AdcMatrixlike):

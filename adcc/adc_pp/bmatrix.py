@@ -64,6 +64,9 @@ def block(ground_state, operator, spaces, order, variant=None):
         raise ValueError("Cannot run a core-valence approximated ADC method on "
                          "top of a ground state without a "
                          "core-valence separation.")
+    if "re" in variant and "cvs" in variant:
+        raise NotImplementedError("Core-valence-approximated RE-ADC not "
+                                  "implemented.")
 
     fn = "_".join(["block"] + variant + spaces + [str(order)])
 
@@ -87,6 +90,11 @@ def block_ph_ph_0(ground_state, op):
     return IsrBlock(apply)
 
 
+block_re_ph_ph_0 = block_ph_ph_0
+
+block_remp_ph_ph_0 = block_ph_ph_0
+
+
 def block_pphh_pphh_0(ground_state, op):
     def apply(ampl):
         return AmplitudeVector(pphh=0.5 * (
@@ -102,6 +110,11 @@ def block_pphh_pphh_0(ground_state, op):
     return IsrBlock(apply)
 
 
+block_re_pphh_pphh_0 = block_pphh_pphh_0
+
+block_remp_pphh_pphh_0 = block_pphh_pphh_0
+
+
 #
 # 0th order coupling
 #
@@ -112,6 +125,11 @@ def block_ph_pphh_0(ground_state, op):
             + 2.0 * einsum('ilca,lc->ia', ampl.pphh, op.ov)
         ))
     return IsrBlock(apply)
+
+
+block_re_ph_pphh_0 = block_ph_pphh_0
+
+block_remp_ph_pphh_0 = block_ph_pphh_0
 
 
 def block_pphh_ph_0(ground_state, op):
@@ -127,10 +145,19 @@ def block_pphh_ph_0(ground_state, op):
     return IsrBlock(apply)
 
 
+block_re_pphh_ph_0 = block_pphh_ph_0
+
+block_remp_pphh_ph_0 = block_pphh_ph_0
+
+
 #
 # 1st order main
 #
 block_ph_ph_1 = block_ph_ph_0
+
+block_re_ph_ph_1 = block_ph_ph_0
+
+block_remp_ph_ph_1 = block_ph_ph_0
 
 
 #
@@ -151,6 +178,11 @@ def block_ph_pphh_1(ground_state, op):
             - 2.0 * einsum('ilcd,nlcd,an->ia', ampl.pphh, t2, op.vo)
         ))
     return IsrBlock(apply)
+
+
+block_re_ph_pphh_1 = block_ph_pphh_1
+
+block_remp_ph_pphh_1 = block_ph_pphh_1
 
 
 def block_pphh_ph_1(ground_state, op):
@@ -180,6 +212,11 @@ def block_pphh_ph_1(ground_state, op):
             ).antisymmetrise(0, 1)
         ))
     return IsrBlock(apply)
+
+
+block_re_pphh_ph_1 = block_pphh_ph_1
+
+block_remp_pphh_ph_1 = block_pphh_ph_1
 
 
 #
@@ -222,3 +259,8 @@ def block_ph_ph_2(ground_state, op):
             + 1.0 * einsum('kc,knce,inaf,ef->ia', ampl.ph, t2, t2, op.vv)
         ))
     return IsrBlock(apply)
+
+
+block_re_ph_ph_2 = block_ph_ph_2
+
+block_remp_ph_ph_2 = block_ph_ph_2

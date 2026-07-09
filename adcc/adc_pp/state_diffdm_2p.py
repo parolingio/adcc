@@ -21,7 +21,7 @@
 ##
 ## ---------------------------------------------------------------------
 from .. import block as b
-from ..LazyMp import LazyMp
+from ..GroundState import GroundState
 from ..AdcMethod import IsrMethod
 from ..functions import einsum, zeros_like
 from ..Intermediates import Intermediates
@@ -35,16 +35,16 @@ from .util import (
 from typing import Optional, Union
 
 
-def diffdm_isr0_2p(mp: LazyMp, amplitude: AmplitudeVector,
+def diffdm_isr0_2p(gs: GroundState, amplitude: AmplitudeVector,
                    intermediates: Intermediates) -> TwoParticleDensity:
     check_singles_amplitudes([b.o, b.v], amplitude)
     u1 = amplitude.ph
 
-    hf = mp.reference_state
+    hf = gs.reference_state
     d_oo = zeros_like(hf.foo)
     d_oo.set_mask("ii", 1)
 
-    dm = TwoParticleDensity(mp, symmetry=OperatorSymmetry.HERMITIAN)
+    dm = TwoParticleDensity(gs, symmetry=OperatorSymmetry.HERMITIAN)
 
     # one-particle ISR(0) diffdm
     p1_oo = -einsum("ia,la->il", u1, u1).evaluate()
@@ -63,16 +63,16 @@ def diffdm_isr0_2p(mp: LazyMp, amplitude: AmplitudeVector,
     return dm
 
 
-def diffdm_isr1s_2p(mp: LazyMp, amplitude: AmplitudeVector,
+def diffdm_isr1s_2p(gs: GroundState, amplitude: AmplitudeVector,
                     intermediates: Intermediates) -> TwoParticleDensity:
-    dm = diffdm_isr0_2p(mp, amplitude, intermediates)  # Get ISR(0) result
+    dm = diffdm_isr0_2p(gs, amplitude, intermediates)  # Get ISR(0) result
     u1 = amplitude.ph
 
-    hf = mp.reference_state
+    hf = gs.reference_state
     d_oo = zeros_like(hf.foo)
     d_oo.set_mask("ii", 1)
 
-    t2 = mp.t2(b.oovv)
+    t2 = gs.t2(b.oovv)
     # TODO move to intermediates!
     # one-particle ISR(0) diffdm
     p1_oo = -einsum("ia,la->il", u1, u1).evaluate()
@@ -100,16 +100,16 @@ def diffdm_isr1s_2p(mp: LazyMp, amplitude: AmplitudeVector,
     return dm
 
 
-def diffdm_isr1_2p(mp: LazyMp, amplitude: AmplitudeVector,
+def diffdm_isr1_2p(gs: GroundState, amplitude: AmplitudeVector,
                    intermediates: Intermediates) -> TwoParticleDensity:
-    dm = diffdm_isr1s_2p(mp, amplitude, intermediates)  # Get ISR(1)-s result
+    dm = diffdm_isr1s_2p(gs, amplitude, intermediates)  # Get ISR(1)-s result
 
     try:
         # ISR(1)-d
         check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude)
         u1, u2 = amplitude.ph, amplitude.pphh
 
-        hf = mp.reference_state
+        hf = gs.reference_state
         d_oo = zeros_like(hf.foo)
         d_oo.set_mask("ii", 1)
 
@@ -132,18 +132,18 @@ def diffdm_isr1_2p(mp: LazyMp, amplitude: AmplitudeVector,
     return dm
 
 
-def diffdm_isr2d_2p(mp: LazyMp, amplitude: AmplitudeVector,
+def diffdm_isr2d_2p(gs: GroundState, amplitude: AmplitudeVector,
                     intermediates: Intermediates) -> TwoParticleDensity:
-    dm = diffdm_isr1_2p(mp, amplitude, intermediates)  # Get ISR(1) result
+    dm = diffdm_isr1_2p(gs, amplitude, intermediates)  # Get ISR(1) result
     check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude)
     u1, u2 = amplitude.ph, amplitude.pphh
-    hf = mp.reference_state
+    hf = gs.reference_state
     d_oo = zeros_like(hf.foo)
     d_oo.set_mask("ii", 1)
 
-    t2 = mp.t2(b.oovv)
-    td2 = mp.td2(b.oovv)
-    p0 = mp.mp2_diffdm
+    t2 = gs.t2(b.oovv)
+    td2 = gs.td2(b.oovv)
+    p0 = gs.second_order_dm_correction()
 
     dm.oooo += (
         # N^6: O^4V^2 / N^4: O^2V^2
@@ -371,9 +371,9 @@ def diffdm_isr2d_2p(mp: LazyMp, amplitude: AmplitudeVector,
     return dm
 
 
-def diffdm_isr2_2p(mp: LazyMp, amplitude: AmplitudeVector,
+def diffdm_isr2_2p(gs: GroundState, amplitude: AmplitudeVector,
                    intermediates: Intermediates) -> TwoParticleDensity:
-    dm = diffdm_isr2d_2p(mp, amplitude, intermediates)  # Get ISR(2)-d result
+    dm = diffdm_isr2d_2p(gs, amplitude, intermediates)  # Get ISR(2)-d result
     # evaluate additional contributions from the S-T block
     # if the vector has a triples component
     try:
@@ -393,10 +393,16 @@ DISPATCH = {
     "isr1": diffdm_isr1_2p,
     "isr2d": diffdm_isr2d_2p,
     "isr2": diffdm_isr2_2p,
+    # RE-ADC and normal ADC share the same properties
+    "re-isr0": diffdm_isr0_2p,
+    "re-isr1s": diffdm_isr1s_2p,
+    "re-isr1": diffdm_isr1_2p,
+    "re-isr2d": diffdm_isr2d_2p,
+    "re-isr2": diffdm_isr2_2p,
 }
 
 
-def state_diffdm_2p(method: Union[str, IsrMethod], ground_state: LazyMp,
+def state_diffdm_2p(method: Union[str, IsrMethod], ground_state: GroundState,
                     amplitude: AmplitudeVector,
                     intermediates: Optional[Intermediates] = None):
     """
@@ -407,7 +413,7 @@ def state_diffdm_2p(method: Union[str, IsrMethod], ground_state: LazyMp,
     ----------
     method : str, IsrMethod
         The method to use for the computation (e.g. "isr2")
-    ground_state : LazyMp
+    ground_state : GroundState
         The ground state upon which the excitation was based
     amplitude : AmplitudeVector
         The amplitude vector
@@ -416,8 +422,8 @@ def state_diffdm_2p(method: Union[str, IsrMethod], ground_state: LazyMp,
     """
     if not isinstance(method, IsrMethod):
         method = IsrMethod(method)
-    if not isinstance(ground_state, LazyMp):
-        raise TypeError("ground_state should be a LazyMp object.")
+    if not isinstance(ground_state, GroundState):
+        raise TypeError("ground_state should be a GroundState object.")
     if not isinstance(amplitude, AmplitudeVector):
         raise TypeError("amplitude should be an AmplitudeVector object.")
     if intermediates is None:

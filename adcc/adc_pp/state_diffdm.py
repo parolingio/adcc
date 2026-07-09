@@ -23,7 +23,7 @@
 from math import sqrt
 
 from adcc import block as b
-from adcc.LazyMp import LazyMp
+from adcc.GroundState import GroundState
 from adcc.AdcMethod import IsrMethod
 from adcc.functions import einsum
 from adcc.Intermediates import Intermediates
@@ -34,20 +34,20 @@ from adcc.NParticleOperator import OperatorSymmetry
 from .util import check_doubles_amplitudes, check_singles_amplitudes
 
 
-def diffdm_isr0(mp, amplitude, intermediates):
+def diffdm_isr0(gs, amplitude, intermediates):
     # C is either c(ore) or o(ccupied)
-    C = b.c if mp.has_core_occupied_space else b.o
+    C = b.c if gs.has_core_occupied_space else b.o
     check_singles_amplitudes([C, b.v], amplitude)
     u1 = amplitude.ph
 
-    dm = OneParticleDensity(mp, symmetry=OperatorSymmetry.HERMITIAN)
+    dm = OneParticleDensity(gs, symmetry=OperatorSymmetry.HERMITIAN)
     dm[C + C] = -einsum("ia,ja->ij", u1, u1)
     dm.vv = einsum("ia,ib->ab", u1, u1)
     return dm
 
 
-def diffdm_isr1(mp, amplitude, intermediates):
-    dm = diffdm_isr0(mp, amplitude, intermediates)  # Get ISR(0) result
+def diffdm_isr1(gs, amplitude, intermediates):
+    dm = diffdm_isr0(gs, amplitude, intermediates)  # Get ISR(0) result
 
     try:
         # ISR(1)-d
@@ -60,13 +60,13 @@ def diffdm_isr1(mp, amplitude, intermediates):
     return dm
 
 
-def diffdm_isr2(mp, amplitude, intermediates):
-    dm = diffdm_isr1(mp, amplitude, intermediates)  # Get ISR(1) result
+def diffdm_isr2(gs, amplitude, intermediates):
+    dm = diffdm_isr1(gs, amplitude, intermediates)  # Get ISR(1) result
     check_doubles_amplitudes([b.o, b.o, b.v, b.v], amplitude)
     u1, u2 = amplitude.ph, amplitude.pphh
 
-    t2 = mp.t2(b.oovv)
-    p0 = mp.mp2_diffdm
+    t2 = gs.t2(b.oovv)
+    p0 = gs.second_order_dm_correction()
     p1_oo = dm.oo.evaluate()  # ISR(1) diffdm
     p1_vv = dm.vv.evaluate()  # ISR(1) diffdm
 
@@ -109,8 +109,8 @@ def diffdm_isr2(mp, amplitude, intermediates):
     return dm
 
 
-def diffdm_cvs_isr1(mp, amplitude, intermediates):
-    dm = diffdm_isr0(mp, amplitude, intermediates)  # Get ISR(0) result
+def diffdm_cvs_isr1(gs, amplitude, intermediates):
+    dm = diffdm_isr0(gs, amplitude, intermediates)  # Get ISR(0) result
 
     try:
         # ISR(1)-d
@@ -124,13 +124,13 @@ def diffdm_cvs_isr1(mp, amplitude, intermediates):
     return dm
 
 
-def diffdm_cvs_isr2(mp, amplitude, intermediates):
-    dm = diffdm_cvs_isr1(mp, amplitude, intermediates)  # Get cvs-ISR(1) result
+def diffdm_cvs_isr2(gs, amplitude, intermediates):
+    dm = diffdm_cvs_isr1(gs, amplitude, intermediates)  # Get cvs-ISR(1) result
     check_doubles_amplitudes([b.o, b.c, b.v, b.v], amplitude)
     u1, u2 = amplitude.ph, amplitude.pphh
 
-    t2 = mp.t2(b.oovv)
-    p0 = mp.second_order_dm_correction(apply_cvs=True)
+    t2 = gs.t2(b.oovv)
+    p0 = gs.second_order_dm_correction(apply_cvs=True)
     p1_vv = dm.vv.evaluate()  # ISR(1) diffdm
 
     # Zeroth order doubles contributions
@@ -171,6 +171,12 @@ DISPATCH = {
     "cvs-isr1": diffdm_cvs_isr1,
     "cvs-isr2d": diffdm_cvs_isr2,  # Identical to CVS-ISR(2)
     "cvs-isr2": diffdm_cvs_isr2,
+    # RE-ADC and normal ADC share the same properties
+    "re-isr0": diffdm_isr0,
+    "re-isr1s": diffdm_isr0,   # Identical to ISR(0)
+    "re-isr1": diffdm_isr1,
+    "re-isr2d": diffdm_isr2,  # Identical to ISR(2)
+    "re-isr2": diffdm_isr2,
 }
 
 
@@ -183,7 +189,7 @@ def state_diffdm(method, ground_state, amplitude, intermediates=None):
     ----------
     method : str, IsrMethod
         The method to use for the computation (e.g. "isr2")
-    ground_state : LazyMp
+    ground_state : GroundState
         The ground state upon which the excitation was based
     amplitude : AmplitudeVector
         The amplitude vector
@@ -192,8 +198,8 @@ def state_diffdm(method, ground_state, amplitude, intermediates=None):
     """
     if not isinstance(method, IsrMethod):
         method = IsrMethod(method)
-    if not isinstance(ground_state, LazyMp):
-        raise TypeError("ground_state should be a LazyMp object.")
+    if not isinstance(ground_state, GroundState):
+        raise TypeError("ground_state should be a GroundState object.")
     if not isinstance(amplitude, AmplitudeVector):
         raise TypeError("amplitude should be an AmplitudeVector object.")
     if intermediates is None:
