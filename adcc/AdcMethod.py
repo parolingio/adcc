@@ -310,8 +310,8 @@ class AdcMethod(Method):
             gs_type=GroundStateType.REMP,
             cvs=False
         ): LevelSpec(
-            max_level=3, ### TO DO
-            special_levels=(MethodLevel.TWO_X,) ### TO DO
+            max_level=3,
+            special_levels=(MethodLevel.TWO_X,)
         )
     }
 
@@ -338,6 +338,14 @@ class IsrMethod(Method):
         LevelKey(
             adc_type=AdcType.PP,
             gs_type=GroundStateType.RE,
+            cvs=False
+        ): LevelSpec(
+            max_level=2,
+            special_levels=(MethodLevel.ONE_S, MethodLevel.TWO_D)
+        ),
+        LevelKey(
+            adc_type=AdcType.PP,
+            gs_type=GroundStateType.REMP,
             cvs=False
         ): LevelSpec(
             max_level=2,

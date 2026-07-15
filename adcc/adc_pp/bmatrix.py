@@ -67,6 +67,9 @@ def block(ground_state, operator, spaces, order, variant=None):
     if "re" in variant and "cvs" in variant:
         raise NotImplementedError("Core-valence-approximated RE-ADC not "
                                   "implemented.")
+    if "remp" in variant and "cvs" in variant:
+        raise NotImplementedError("Core-valence-approximated RE-ADC not "
+                                  "implemented.")
 
     fn = "_".join(["block"] + variant + spaces + [str(order)])
 

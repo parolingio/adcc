@@ -129,6 +129,12 @@ DISPATCH = {
     "re-isr1": s2s_tdm_isr1,
     "re-isr2d": s2s_tdm_isr2,  # Identical to ISR(2)
     "re-isr2": s2s_tdm_isr2,
+    # REMP-ADC and normal ADC share the same properties
+    "remp-isr0": s2s_tdm_isr0,
+    "remp-isr1s": s2s_tdm_isr0,  # Identical to ISR(0)
+    "remp-isr1": s2s_tdm_isr1,
+    "remp-isr2d": s2s_tdm_isr2,  # Identical to ISR(2)
+    "remp-isr2": s2s_tdm_isr2,
 }
 
 

@@ -329,7 +329,7 @@ class LazyMp(GroundState):
     def third_order_dm_correction(self, apply_cvs: bool = False
                                   ) -> OneParticleDensity:
         """
-        Return the third-order MP contribution to the ground state
+        Return the third-order contribution to the ground state
         difference density in the MO basis.
         """
         if self.has_core_occupied_space:

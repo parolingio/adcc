@@ -117,7 +117,7 @@ class GroundState:
 
     def diffdm(self, level: int = 2, apply_cvs: bool = False) -> OneParticleDensity:
         """
-        Return the ground state difference denstiy in the MO basis
+        Return the ground state difference density in the MO basis
         with all corrections up to the specified order of perturbation theory.
         """
         if level >= 0 and level < 2:
@@ -323,17 +323,6 @@ class GroundState:
         ret.reference_state = self.reference_state
         return ret.evaluate()
 
-    def third_order_dm_correction(self, apply_cvs: bool = False
-                                  ) -> OneParticleDensity:
-        """
-        Return the third-order contribution to the ground state
-        difference density in the MO basis.
-        """
-        raise NotImplementedError(
-            "Third-order contribution to the ground state difference "
-            "density in the MO basis not implemented on "
-            f"{self.__class__.__name__} class."
-        )
 
     @cached_member_function()
     def first_order_dm_correction_2p(self, apply_cvs: bool = False

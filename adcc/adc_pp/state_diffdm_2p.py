@@ -399,6 +399,12 @@ DISPATCH = {
     "re-isr1": diffdm_isr1_2p,
     "re-isr2d": diffdm_isr2d_2p,
     "re-isr2": diffdm_isr2_2p,
+    # REMP-ADC and normal ADC share the same properties
+    "remp-isr0": diffdm_isr0_2p,
+    "remp-isr1s": diffdm_isr1s_2p,
+    "remp-isr1": diffdm_isr1_2p,
+    "remp-isr2d": diffdm_isr2d_2p,
+    "remp-isr2": diffdm_isr2_2p,
 }
 
 

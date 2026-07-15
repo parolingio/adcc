@@ -114,11 +114,18 @@ DISPATCH = {
     "cvs-isr1": mtm_cvs_isr0,  # Identical to CVS-ISR(0)
     "cvs-isr2d": mtm_cvs_isr2,  # Identical to CVS-ISR(2)
     "cvs-isr2": mtm_cvs_isr2,
+    # RE-ADC and normal ADC share the same properties
     "re-adc0": mtm_isr0,
     "re-isr1s": mtm_isr1,  # Identical to ISR(1)
     "re-adc1": mtm_isr1,
     "re-isr2d": mtm_re_isr2,  # Identical to ISR(2)
     "re-adc2": mtm_re_isr2,
+    # REMP-ADC and normal ADC share the same properties
+    "remp-adc0": mtm_isr0,
+    "remp-isr1s": mtm_isr1,  # Identical to ISR(1)
+    "remp-adc1": mtm_isr1,
+    "remp-isr2d": mtm_isr2,  # Identical to ISR(2)
+    "remp-adc2": mtm_isr2,
 }
 
 
