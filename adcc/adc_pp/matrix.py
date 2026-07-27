@@ -706,7 +706,7 @@ def block_remp_ph_pphh_2(hf, remp, intermediates):
     t2_1 = remp.t2(b.oovv)
     t1_2 = remp.ts2(b.ov)
 
-    t2eri_A = intermediates.adc3_pia  # also includes the first order term
+    t2eri_A = - intermediates.adc3_pia  # also includes the first order term
     t2eri_B = intermediates.adc3_pib  # also includes the first order term
 
     def apply(ampl):
@@ -832,7 +832,7 @@ def block_remp_pphh_ph_2(hf, remp, intermediates):
     t2_1 = remp.t2(b.oovv)
     t1_2 = remp.ts2(b.ov)
 
-    t2eri_A = intermediates.adc3_pia  # also includes first order term
+    t2eri_A = - intermediates.adc3_pia  # also includes first order term
     t2eri_B = intermediates.adc3_pib  # also includes first order term
 
     def apply(ampl):
