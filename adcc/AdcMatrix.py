@@ -205,7 +205,7 @@ class AdcMatrix(AdcMatrixlike):
 
     def __init__(self, method, hf_or_mp, block_orders=None,
                  intermediates=None, diagonal_precomputed=None,
-                 gs_conv_tol=None, gs_max_iter=None):
+                 gs_conv_tol=None, gs_max_iter=None, remp_A=None):
         """
         Initialise an ADC matrix.
 
@@ -226,8 +226,11 @@ class AdcMatrix(AdcMatrixlike):
             Convergence tolerance for the RE and REMP ground state amplitudes
             (default: SCF tolerance).
         gs_max_iter : int, optional
-            Maximum number of iterations for the RE ground state amplitudes
+            Maximum number of iterations for the RE and REMP ground state
+            amplitudes
             (default: 100).
+        remp_A : float, optional
+            The mixing parameter of RE and MP schemes in REMP calculations.
         """
         # circular import -> can't import on top
         ##############   from .LazyRe import LazyRe
@@ -246,8 +249,8 @@ class AdcMatrix(AdcMatrixlike):
                                   max_iter=gs_max_iter)
             elif method.gs_type.to_str() == "remp":
                 from .LazyRemp import LazyRemp
-                hf_or_mp = LazyRemp(hf_or_mp, conv_tol=gs_conv_tol,
-                                  max_iter=gs_max_iter)
+                hf_or_mp = LazyRemp(hf_or_mp, remp_A=remp_A,
+                                    conv_tol=gs_conv_tol, max_iter=gs_max_iter)
             else:
                 raise ValueError(f"Unknown ground state type {method.gs_type}.")
         if not isinstance(hf_or_mp, GroundState):
