@@ -279,6 +279,58 @@ def block_cvs_pphh_pphh_1(hf, mp, intermediates):
     return AdcBlock(apply, diagonal_pphh_pphh_1(hf))
 
 
+def diagonal_ppphhh_ppphhh_1(hf, intermediates):
+    dinterm_ov = (
+        direct_sum("a-i->ia", hf.fvv.diagonal(), hf.foo.diagonal())
+        - 3.0 * einsum("iaia->ia", hf.ovov)
+    ).evaluate()
+    diag_oo = einsum("ijij->ij", hf.oooo).symmetrise()
+    diag_vv = einsum("abab->ab", hf.vvvv).symmetrise()
+    return AmplitudeVector(ppphhh=(
+        # 0th order
+        intermediates.df3
+        # 1st order
+        + direct_sum("ia+jb+kc->ijkabc", dinterm_ov, dinterm_ov,
+                     dinterm_ov).symmetrise(3, 4, 5)
+        + direct_sum("ijk+abc->ijkabc", 
+            # I don't think we need to symmetrize any of the following two 
+            # lines, as the symmetrization of diag_oo and diag_vv shoule
+            # ensure they are also symmetric to any permutation of the indices
+            direct_sum("ij+jk+ki->ijk", diag_oo, diag_oo, diag_oo),
+            direct_sum("ab+bc+ca->abc", diag_vv, diag_vv, diag_vv)
+        )
+    ))
+
+
+def block_ppphhh_ppphhh_1(hf, mp, intermediates):
+    def apply(ampl):
+        ur3 = ampl.ppphhh
+        #diag = intermediates.df3
+        return AmplitudeVector(ppphhh=(
+            # 0th order
+            # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+            intermediates.df3 * ur3
+            # The following two lines should be identical
+            ### # N^6: O^3V^3 / N^6: O^3V^3
+            ### + 3.0 * einsum("ijkabc,a->ijkabc", ur3, hf.fvv.diagonal()).antisymmetrise(3, 4, 5)
+            ### # N^6: O^3V^3 / N^6: O^3V^3
+            ### - 3.0 * einsum("ijkabc,i->ijkabc", ur3, hf.foo.diagonal()).antisymmetrise(0, 1, 2)
+            # 1st order
+            # The scaling comment is given as: [comp_scaling] / [mem_scaling]
+            # N^8: O^4V^4 / N^6: O^3V^3
+            + 9 * einsum("iklabd,jdlc->ijkabc", ur3, hf.ovov
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+            # N^8: O^5V^3 / N^6: O^3V^3
+            + 1.5 * einsum("ilmabc,jklm->ijkabc", ur3, hf.oooo
+            ).antisymmetrise(0, 1, 2)
+            # N^8: O^3V^5 / N^6: O^3V^3
+            + 1.5 * einsum("ijkade,bcde->ijkabc", ur3, hf.vvvv
+            ).antisymmetrise(3, 4, 5)
+        ))
+
+    return AdcBlock(apply, diagonal_ppphhh_ppphhh_1(hf, intermediates))
+
+
 #
 # 1st order coupling
 #
