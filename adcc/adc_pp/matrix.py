@@ -287,18 +287,9 @@ def diagonal_ppphhh_ppphhh_1(hf, intermediates):
     diag_oo = einsum("ijij->ij", hf.oooo).symmetrise()
     diag_vv = einsum("abab->ab", hf.vvvv).symmetrise()
     return AmplitudeVector(ppphhh=(
-        # 0th order
-        intermediates.df3
-        # 1st order
-        + direct_sum("ia+jb+kc->ijkabc", dinterm_ov, dinterm_ov,
-                     dinterm_ov).symmetrise(3, 4, 5)
-        + direct_sum("ijk+abc->ijkabc", 
-            # I don't think we need to symmetrize any of the following two 
-            # lines, as the symmetrization of diag_oo and diag_vv shoule
-            # ensure they are also symmetric to any permutation of the indices
-            direct_sum("ij+jk+ki->ijk", diag_oo, diag_oo, diag_oo),
-            direct_sum("ab+bc+ca->abc", diag_vv, diag_vv, diag_vv)
-        )
+        # 0th + 1st order
+        3.0 * direct_sum("ij,ka,bc->ijkabc", diag_oo, dinterm_ov,
+                         diag_vv).symmetrise(0, 1, 2).symmetrise(3, 4, 5)
     ))
 
 
