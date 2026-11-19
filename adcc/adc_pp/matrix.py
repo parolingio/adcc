@@ -674,6 +674,45 @@ def block_ppphhh_ph_2(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+def block_pphh_ppphhh_2(hf, mp, intermediates):
+    t2_1 = mp.t2(b.oovv)
+
+    def apply(ampl):
+        ur3 = ampl.ppphhh
+        return AmplitudeVector(pphh=(
+            + 2 * ( 
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 3 * einsum("jklc,iklabc->ijab",
+                             einsum("kmcd,jmld->jklc", t2_1, hf.ooov), ur3)
+                - 3 / 4 * einsum("iklc,jklabc->ijab",
+                                 einsum("klde,icde->iklc", t2_1, hf.ovvv), ur3)
+            ).antisymmetrise(0, 1)
+            + 2 * (
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 3 * einsum("kbcd,ijkacd->ijab",
+                             einsum("klce,ldbe->kbcd", t2_1, hf.ovvv), ur3)
+                - 3 / 4 * einsum("kacd,ijkbcd->ijab",
+                                 einsum("lmcd,lmka->kacd", t2_1, hf.ooov), ur3)
+            ).antisymmetrise(2, 3)
+            + 4 * (
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 3 / 2 * einsum("ilma,jmlb->ijab",
+                                 einsum("iklacd,kmcd->ilma", ur3, t2_1), hf.ooov)
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 3 / 2 * einsum("iade,jdbe->ijab",
+                                 einsum("iklacd,klce->iade", ur3, t2_1), hf.ovvv)
+            ).antisymmetrise(0, 1).antisymmetrise(2, 3)
+            # N^7: O^4V^3 / N^6: O^3V^3
+            + 3 / 2 * einsum("ijle,leab->ijab",
+                             einsum("ijkcde,klcd->ijle", ur3, t2_1), hf.ovvv)
+            # N^7: O^3V^4 / N^6: O^3V^3
+            + 3 / 2 * einsum("mabd,ijmd->ijab",
+                             einsum("klmabc,klcd->mabd", ur3, t2_1), hf.ooov)
+        ))  # fmt: skip
+
+    return AdcBlock(apply, 0)
+
+
 def block_ppphhh_pphh_2(hf, mp, intermediates):
     t2_1 = mp.t2(b.oovv)
 
