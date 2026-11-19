@@ -674,6 +674,47 @@ def block_ppphhh_ph_2(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+def block_ppphhh_pphh_2(hf, mp, intermediates):
+    t2_1 = mp.t2(b.oovv)
+
+    def apply(ampl):
+        ur2 = ampl.pphh
+        return AmplitudeVector(ppphhh=(
+            # Prefactor of 18: the antisymmetrisation generates 36 terms with
+            # an overall factor of 1/36, so each term appears with weight 1/2,
+            # yielding effectively 18 distinct terms.
+            18 * (
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 1 / 3 * einsum("jklc,ilab->ijkabc",
+                                 einsum("jmcd,lmkd->jklc", t2_1, hf.ooov), ur2)
+                - 1 / 3 * einsum("ikma,jmbc->ijkabc",
+                                 einsum("ilad,lmkd->ikma", ur2, hf.ooov), t2_1)
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 3 * einsum("kbcd,ijad->ijkabc",
+                                 einsum("klbe,lcde->kbcd", t2_1, hf.ovvv), ur2)
+                - 1 / 3 * einsum("iace,jkbe->ijkabc",
+                                 einsum("ilad,lcde->iace", ur2, hf.ovvv), t2_1)
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+            # Prefactor of 9: the antisymmetrisation generates 36 terms with
+            # an overall factor of 1/36, so each term appears with weight 1/4,
+            # yielding effectively 9 distinct terms.
+            + 9 * (
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("jabd,ikcd->ijkabc",
+                                 einsum("lmab,lmjd->jabd", ur2, hf.ooov), t2_1)
+                - 1 / 6 * einsum("jbcd,ikad->ijkabc",
+                                 einsum("lmbc,lmjd->jbcd", t2_1, hf.ooov), ur2)
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 1 / 6 * einsum("iklc,jlab->ijkabc",
+                                 einsum("ikde,lcde->iklc", t2_1, hf.ovvv), ur2)
+                - 1 / 6 * einsum("ijlb,klac->ijkabc",
+                                 einsum("ijde,lbde->ijlb", ur2, hf.ovvv), t2_1)
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+        ))  # fmt: skip
+
+    return AdcBlock(apply, 0)
+
+
 #
 # 3rd order main
 #
