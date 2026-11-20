@@ -1430,6 +1430,76 @@ def block_pphh_ph_3(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+def block_ph_ppphhh_3(hf, mp, intermediates):
+    t2_1 = mp.t2(b.oovv)
+    t2_2 = mp.td2(b.oovv)
+    t3_2 = mp.tt2(b.ooovvv)
+
+    def apply(ampl):
+        ur3 = ampl.ppphhh
+        return AmplitudeVector(ph=(
+            # 2nd order
+            # N^7: O^4V^3 / N^6: O^3V^3
+            + 3 * einsum("ijld,jald->ia",
+                         einsum("ijkbcd,klbc->ijld", ur3, t2_1), hf.ovov)
+            # N^7: O^3V^4 / N^6: O^3V^3
+            + 3 / 2 * einsum("ibde,aebd->ia",
+                             einsum("ijkbcd,jkce->ibde", ur3, t2_1), hf.vvvv)
+            # N^7: O^3V^4 / N^6: O^3V^3
+            + 3 * einsum("kacd,ickd->ia",
+                         einsum("jklabc,jlbd->kacd", ur3, t2_1), hf.ovov)
+            # N^7: O^4V^3 / N^6: O^3V^3
+            + 3 / 2 * einsum("jlma,imjl->ia",
+                             einsum("jklabc,kmbc->jlma", ur3, t2_1), hf.oooo)
+            # 3rd order
+            # N^8: O^4V^4 / N^6: O^3V^3
+            - 3 / 2 * einsum("ikde,kead->ia",
+                             einsum("ijlbce,jklbcd->ikde", ur3, t3_2), hf.ovvv)
+            - 0.5 * einsum("ijklbe,jklabe->ia",
+                           einsum("jklbcd,iecd->ijklbe", t3_2, hf.ovvv), ur3)
+            # N^8: O^5V^3 / N^6: O^3V^3
+            - 3 / 2 * einsum("ijlmbc,jlmabc->ia",
+                             einsum("jklbcd,ikmd->ijlmbc", t3_2, hf.ooov), ur3)
+            - 0.5 * einsum("iklm,klma->ia",
+                           einsum("ijmbcd,jklbcd->iklm", ur3, t3_2), hf.ooov)
+            # N^7: O^3V^4 / N^6: O^3V^3
+            - 3 / 2 * einsum("icde,acde->ia",
+                             einsum("ijkbde,jkbc->icde", ur3, t2_2), hf.vvvv)
+            + 3 / 4 * einsum("ilme,lmae->ia",
+                             einsum("ibce,lmbc->ilme",
+                                    einsum("ijkbcd,jkde->ibce", ur3, t2_1),
+                                    t2_1), hf.oovv)
+            + 0.5 * einsum("ce,ieac->ia",
+                           einsum("jklbde,jklbcd->ce", ur3, t3_2), hf.ovvv)
+            # N^7: O^4V^3 / N^6: O^3V^3
+            - 3 * einsum("ijklbd,jklabd->ia",
+                         einsum("jkbc,idlc->ijklbd", t2_2, hf.ovov), ur3)
+            + 3 * einsum("ijld,jdla->ia",
+                         einsum("iklbcd,jkbc->ijld", ur3, t2_2), hf.ovov)
+            + 3 * einsum("ijklbc,jklabc->ia",
+                         einsum("ilbd,jkcd->ijklbc",
+                                einsum("lmbe,imde->ilbd", t2_1, hf.oovv),
+                                t2_1), ur3)
+            + 3 * einsum("ilme,lmae->ia",
+                         einsum("ijmc,jlce->ilme",
+                                einsum("ijkbcd,kmbd->ijmc", ur3, t2_1),
+                                t2_1), hf.oovv)
+            + 3 / 2 * einsum("jlma,ijlm->ia",
+                             einsum("klmabc,jkbc->jlma", ur3, t2_2), hf.oooo)
+            + 3 / 2 * einsum("me,imae->ia",
+                             einsum("jkmc,jkce->me",
+                                    einsum("jklbcd,lmbd->jkmc", ur3, t2_1),
+                                    t2_1), hf.oovv)
+            - 0.5 * einsum("lm,ilma->ia",
+                           einsum("jkmbcd,jklbcd->lm", ur3, t3_2), hf.ooov)
+            + 3 / 4 * einsum("ijkm,jkma->ia",
+                             einsum("jkde,imde->ijkm", t2_1, hf.oovv),
+                                    einsum("jklabc,lmbc->jkma", ur3, t2_1))
+        ))  # fmt: skip
+
+    return AdcBlock(apply, 0)
+
+
 #
 # 4th order main
 #
