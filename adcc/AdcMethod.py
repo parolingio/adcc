@@ -38,6 +38,11 @@ class MethodLevel(Enum):
 
     # special levels
     TWO_X = "2x"  # extended 2nd-order ADC: 2p2h-2p2h in 1st order
+    # Extended 4th-order ADC: 2p2h-2p2h in 3rd order;
+    #                         2p2h-3p3h in 2nd order;
+    #                         3p3h-2p2h in 2nd order;
+    #                         3p3h-3p3h in 1st order.
+    FOUR_X = "4x"
     # 1st-order ISR: in singles excitation space only (starting from 1-particle
     # operators, doubles are required for a consistent first-order description)
     ONE_S = "1s"
@@ -283,7 +288,7 @@ class AdcMethod(Method):
     _method_base_name = "adc"
     _supported_levels: ClassVar = {
         LevelKey(adc_type=AdcType.PP, gs_type=GroundStateType.MP, cvs=False): LevelSpec(
-            max_level=4, special_levels=(MethodLevel.TWO_X,)
+            max_level=4, special_levels=(MethodLevel.TWO_X, MethodLevel.FOUR_X,)
         ),
         LevelKey(adc_type=AdcType.PP, gs_type=GroundStateType.MP, cvs=True): LevelSpec(
             max_level=3, special_levels=(MethodLevel.TWO_X,)
