@@ -809,6 +809,7 @@ def block_pphh_pphh_3(hf, mp, intermediates):
     p0_2 = mp.mp2_diffdm
     p0_2_oo, p0_2_vv, t1_2 = p0_2.oo, p0_2.vv, p0_2.ov
 
+    t2sq = intermediates.t2sq
     t2eri_3 = mp.t2eri(b.oovv, b.oo).evaluate()
     t2eri_4 = mp.t2eri(b.oovv, b.ov).evaluate()
     t2eri_5 = mp.t2eri(b.oovv, b.vv).evaluate()
