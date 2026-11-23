@@ -75,9 +75,9 @@ class AdcMatrixlike:
         "isr1s": {"ph_ph": 1, "ph_pphh": None, "pphh_ph": None, "pphh_pphh": None},
         "isr2d": {"ph_ph": 2, "ph_pphh": 1, "pphh_ph": 1, "pphh_pphh": 0},
         "isr3d": {"ph_ph": 3, "ph_pphh": 2, "pphh_ph": 2, "pphh_pphh": 1},
-        "adc4x": {    "ph_ph": 4,   "ph_pphh"  : 3,     "ph_ppphhh": 2,
+        "adc4x": {    "ph_ph": 4,   "ph_pphh"  : 3,     "ph_ppphhh": 3,
                     "pphh_ph": 3, "pphh_pphh"  : 3,   "pphh_ppphhh": 2,
-                  "ppphhh_ph": 2, "ppphhh_pphh": 2, "ppphhh_ppphhh": 1},
+                  "ppphhh_ph": 3, "ppphhh_pphh": 2, "ppphhh_ppphhh": 1},
     }
 
     @classmethod
