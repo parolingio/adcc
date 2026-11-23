@@ -1500,6 +1500,99 @@ def block_ph_ppphhh_3(hf, mp, intermediates):
     return AdcBlock(apply, 0)
 
 
+def block_ppphhh_ph_3(hf, mp, intermediates):
+    t2_1 = mp.t2(b.oovv)    
+    t2_2 = mp.td2(b.oovv)
+    t3_2 = mp.tt2(b.ooovvv)
+                            
+    def apply(ampl):        
+        ur1 = ampl.ph       
+        return AmplitudeVector(ppphhh=(
+            # 2nd order
+            # Prefactor of 18: the antisymmetrisation generates 36 terms with
+            # an overall factor of 1/36, so each term appears with weight 1/2,
+            # yielding effectively 18 distinct terms.
+            18 * (
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 1 / 6 * einsum("iklc,jlab->ijkabc",
+                                 einsum("id,kdlc->iklc", ur1, hf.ovov), t2_1)
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("kacd,ijbd->ijkabc",
+                                 einsum("la,kdlc->kacd", ur1, hf.ovov), t2_1)
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+            # Prefactor of 9: the antisymmetrisation generates 36 terms with
+            # an overall factor of 1/36, so each term appears with weight 1/4,
+            # yielding effectively 9 distinct terms.
+            + 9 * (
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("ibce,jkae->ijkabc",
+                                 einsum("id,bcde->ibce", ur1, hf.vvvv), t2_1)
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 1 / 6 * einsum("jkma,imbc->ijkabc",
+                                 einsum("la,jklm->jkma", ur1, hf.oooo), t2_1)
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+            # 3rd order
+            + 9 * (
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("iacd,jkbd->ijkabc",
+                                 einsum("ie,acde->iacd", ur1, hf.vvvv), t2_2)
+                - 1 / 12 * einsum("iace,jkbe->ijkabc",
+                                  einsum("ilme,lmac->iace",
+                                         einsum("id,lmde->ilme", ur1, hf.oovv),
+                                         t2_1), t2_1)
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 2 / 6 * einsum("ijklbc,la->ijkabc",
+                                 einsum("ijbd,kdlc->ijklbc", t2_2, hf.ovov), ur1)
+                - 2 / 6 * einsum("iklc,jlab->ijkabc",
+                                 einsum("id,kdlc->iklc", ur1, hf.ovov), t2_2)
+                + 2 / 6 * einsum("ikmc,jmab->ijkabc",
+                                 einsum("ilme,klce->ikmc",
+                                        einsum("id,lmde->ilme", ur1, hf.oovv),
+                                        t2_1), t2_1)
+                + 2 / 6 * einsum("ijklbc,la->ijkabc",
+                                 einsum("jlcd,ikbd->ijklbc",
+                                        einsum("jmce,lmde->jlcd", t2_1, hf.oovv),
+                                        t2_1), ur1)
+                - 1 / 6 * einsum("ikla,jlbc->ijkabc",
+                                 einsum("ma,iklm->ikla", ur1, hf.oooo), t2_2)
+                - 1 / 12 * einsum("ikma,jmbc->ijkabc",
+                                  einsum("iklm,la->ikma",
+                                         einsum("ikde,lmde->iklm", t2_1, hf.oovv),
+                                         ur1), t2_1)
+                - 1 / 6 * einsum("jkmc,imab->ijkabc",
+                                 einsum("me,jkce->jkmc",
+                                        einsum("ld,lmde->me", ur1, hf.oovv),
+                                        t2_1), t2_1)
+                # N^8: O^4V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("ilcd,jklabd->ijkabc",
+                                 einsum("ie,lcde->ilcd", ur1, hf.ovvv), t3_2)
+                # N^8: O^5V^3 / N^6: O^3V^3
+                - 1 / 6 * einsum("ijkmbc,ma->ijkabc",
+                                 einsum("ijlbcd,lmkd->ijkmbc", t3_2, hf.ooov),
+                                 ur1)
+            ).antisymmetrise(0, 1, 2).antisymmetrise(3, 4, 5)
+            + 3 * (
+                # N^8: O^5V^3 / N^6: O^3V^3
+                - 2 / 12 * einsum("iklm,jlmabc->ijkabc",
+                                  einsum("id,lmkd->iklm", ur1, hf.ooov), t3_2)
+                # N^7: O^4V^3 / N^6: O^3V^3
+                - 1 / 6 * einsum("jl,iklabc->ijkabc",
+                                 einsum("md,lmjd->jl", ur1, hf.ooov), t3_2)
+            ).antisymmetrise(0, 1, 2)
+            + 3 * (
+                # N^8: O^4V^4 / N^6: O^3V^3
+                - 2 / 12 * einsum("ijklbc,la->ijkabc",
+                                  einsum("ijkbde,lcde->ijklbc", t3_2, hf.ovvv),
+                                  ur1)
+                # N^7: O^3V^4 / N^6: O^3V^3
+                - 1 / 6 * einsum("bd,ijkacd->ijkabc",
+                                 einsum("le,lbde->bd", ur1, hf.ovvv), t3_2)
+            ).antisymmetrise(3, 4, 5)
+        ))  # fmt: skip
+
+    return AdcBlock(apply, 0)
+
+
 #
 # 4th order main
 #
